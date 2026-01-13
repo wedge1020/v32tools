@@ -31,13 +31,25 @@ struct node
     Node     *next;
 };
 
-Node    *list;
+Node *list;
  
-Node    *add_node        (Node   *,   uint32_t);
-void     display_help    (int8_t *);
-void     display_version (void);
+void  display_usage (int8_t *argv)
+{
+    fprintf (stdout, "Usage: %s [OPTION]... FILE\n", argv);
+    fprintf (stdout, "Display hex representation of bytes read from FILE.\n\n");
+    fprintf (stdout, "Mandatory arguments to long options are mandatory for ");
+    fprintf (stdout, "short options too.\n\n");
+    fprintf (stdout, "  -a, --address=ADDR         highlight WORD at ADDR\n");
+    fprintf (stdout, "  -1, --column               force one WORD column output\n");
+    fprintf (stdout, "  -r, --range=ADDR1-ADDR2    highlight WORDs in ADDR range\n");
+    fprintf (stdout, "  -W, --width=WIDTH          set line WIDTH (in bytes)\n");
+    fprintf (stdout, "  -w, --wordsize=SIZE        set WORD size to SIZE (in bytes)\n");
+    fprintf (stdout, "  -v, --verbose              enable operational verbosity\n");
+    fprintf (stdout, "  -h, --help                 display this usage information\n\n");
+    exit (0);
+}
 
-Node    *add_node (Node *tmp, uint32_t address)
+Node *add_node (Node *tmp, uint32_t address)
 {
     if (list            == NULL)
     {
@@ -101,12 +113,11 @@ int32_t  main (int argc, char **argv)
     // getopt(3) long options and mapping to short options
     //
     struct option long_options[]   = {
-       { "column",   no_argument,       0, '1' },
        { "address",  required_argument, 0, 'a' },
+       { "column",   no_argument,       0, '1' },
        { "range",    required_argument, 0, 'r' },
-       { "wordsize", required_argument, 0, 'w' },
        { "width",    required_argument, 0, 'W' },
-       { "version",  no_argument,       0, 'V' },
+       { "wordsize", required_argument, 0, 'w' },
        { "help",     no_argument,       0, 'h' },
        { "verbose",  no_argument,       0, 'v' },
        { 0,          0,                 0,  0  }
@@ -117,7 +128,7 @@ int32_t  main (int argc, char **argv)
     // Process command-line arguments, via getopt(3)
     //
     opt                            = getopt_long (argc, argv,
-                                                  "1a:r:w:W:hVv",
+                                                  "a:1r:W:w:hv",
                                                   long_options,
                                                   &option_index);
     while (opt                    != -1)
@@ -165,16 +176,14 @@ int32_t  main (int argc, char **argv)
                 break;
 
             case 'h':
-                break;
-
-            case 'V':
+                display_usage (argv[0]);
                 break;
 
             case 'v':
                 break;
         }
         opt                        = getopt_long (argc, argv,
-                                                  "1a:r:w:W:hVv",
+                                                  "a:1r:W:w:hv",
                                                   long_options,
                                                   &option_index);
     }
@@ -207,7 +216,7 @@ int32_t  main (int argc, char **argv)
     // Display offset header
     //
     fprintf (stdout, "               ");
-    for (data = 0; data < wordsize; data++)
+    for (data = 0; data < linewidth; data++)
     {
         fprintf (stdout, "   +%-6u   ", data);
     }
@@ -438,7 +447,7 @@ int32_t  main (int argc, char **argv)
     // Display offset footer
     //
     fprintf (stdout, "               ");
-    for (data = 0; data < wordsize; data++)
+    for (data = 0; data < linewidth; data++)
     {
         fprintf (stdout, "   +%-6u   ", data);
     }
