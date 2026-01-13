@@ -280,6 +280,10 @@ int32_t  main (int argc, char **argv)
             if (feof (fptr))
             {
                 incomplete                    = index;
+                if (incomplete               == 0)
+                {
+                    break;
+                }
             }
         }
         else
@@ -359,7 +363,7 @@ int32_t  main (int argc, char **argv)
                 //
                 // Display the byte of data
                 //
-                fprintf (stdout, "%.2X ", (line+index) -> value);
+                fprintf (stdout, "%.2hhX ", (line+index) -> value);
                 (line+index) -> value         = 0;
                 (line+index) -> flag          = 0;
 
@@ -421,10 +425,10 @@ int32_t  main (int argc, char **argv)
         //
         // Check for line address highlight: if enabled, wrap the escape sequence
         //
-        if (lineflag                     == 1)
+        if (lineflag                         == 1)
         {
             fprintf (stdout, "\e[m");
-            lineflag                      = 0;
+            lineflag                          = 0;
         }
 
     } while (!feof (fptr));
