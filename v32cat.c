@@ -91,6 +91,7 @@ int32_t  main (int argc, char **argv)
     uint8_t   lineflag             = 0;
     uint8_t   flag                 = 0;
     uint8_t   size                 = 0;
+    uint8_t   pos                  = 0;
     int32_t   data                 = 0;        // variable holding input
     int32_t   incomplete           = -1;
     uint32_t  lineaddr             = 0;        // start of line address
@@ -105,6 +106,7 @@ int32_t  main (int argc, char **argv)
     int32_t   option_index         = 0;
     Byte     *line                 = NULL;     // array for line input
     Node     *tmp                  = NULL;
+    int8_t    HEADER[]             = { 'V', '3', '2', '-' };
 
     list                           = NULL;
 
@@ -302,9 +304,39 @@ int32_t  main (int argc, char **argv)
 
         ////////////////////////////////////////////////////////////////////////////////
         //
+        // Check the current line for a V32 HEADER
+        //
+        data                                  = 0;
+        pos                                   = 0;
+        for (index = 0; index < (wordsize * linewidth); index++)
+        {
+            if ((line+index) -> value        == HEADER[pos])
+            {
+                data                          = data + 1;
+                pos                           = pos  + 1;
+                
+                ////////////////////////////////////////////////////////////////////////
+                //
+                // If we have a match for a V32 HEADER, set lineflag and bail
+                //
+                if (data                     == 3)
+                {
+                    lineflag                  = 8;
+                    break;
+                }
+            }
+            else
+            {
+                data                          = 0;
+                pos                           = 0;
+            }
+        }
+
+        ////////////////////////////////////////////////////////////////////////////////
+        //
         // Check for line address highlight: if enabled, do the escape sequence
         //
-        if (lineflag                         == 1)
+        if (lineflag                         >  0)
         {
             fprintf (stdout, "\e[1;33m");
         }
@@ -319,7 +351,7 @@ int32_t  main (int argc, char **argv)
         //
         // Check for line address highlight: if enabled, wrap the escape sequence
         //
-        if (lineflag                         == 1)
+        if (lineflag                         >  0)
         {
             fprintf (stdout, "\e[m");
         }
@@ -351,6 +383,16 @@ int32_t  main (int argc, char **argv)
             //
             else
             {
+                ////////////////////////////////////////////////////////////////////////
+                //
+                // Check for V32 HEADER highlighting
+                //
+                if (lineflag                 >  1)
+                {
+                    fprintf (stdout, "\e[1;31m");
+                    flag                      = 1;
+                }
+                
                 ////////////////////////////////////////////////////////////////////////
                 //
                 // Check for address highlight match: enable if confirmed
@@ -392,6 +434,17 @@ int32_t  main (int argc, char **argv)
 
                 ////////////////////////////////////////////////////////////////////////
                 //
+                // When dealing with V32 HEADERS, lineflag also serves as a counter
+                // to highlight bytes; decrement it by one as a byte has just been
+                // displayed
+                //
+                if (lineflag                 >  1)
+                {
+                    lineflag                  = lineflag - 1;
+                }
+
+                ////////////////////////////////////////////////////////////////////////
+                //
                 // Check for address highlight match: wrap if confirmed
                 //
                 if ((line+index) -> flag     == 1)
@@ -419,7 +472,7 @@ int32_t  main (int argc, char **argv)
         //
         // Check for line address highlight: if enabled, do the escape sequence
         //
-        if (lineflag                         == 1)
+        if (lineflag                         >  0)
         {
             fprintf (stdout, "\e[1;33m");
         }
@@ -434,7 +487,7 @@ int32_t  main (int argc, char **argv)
         //
         // Check for line address highlight: if enabled, wrap the escape sequence
         //
-        if (lineflag                         == 1)
+        if (lineflag                         >  0)
         {
             fprintf (stdout, "\e[m");
             lineflag                          = 0;
