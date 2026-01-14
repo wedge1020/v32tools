@@ -402,8 +402,11 @@ int32_t  main (int argc, char **argv)
                 //
                 else if (lineflag            >  1)
                 {
-                    fprintf (stdout, "\e[1;31m");
-                    flag                      = 1;
+                    if (flag                 == 0)
+                    {
+                        fprintf (stdout, "\e[1;31m");
+                        flag                  = 1;
+                    }
                 }
 
                 else
@@ -498,7 +501,10 @@ int32_t  main (int argc, char **argv)
         if (lineflag                         >  0)
         {
             fprintf (stdout, "\e[m");
-            lineflag                          = 0;
+            if (lineflag                     == 1)
+            {
+                lineflag                      = 0;
+            }
         }
 
     } while (!feof (fptr));
