@@ -33,52 +33,13 @@ struct node
 
 Node *list;
  
-void  display_usage (int8_t *argv)
-{
-    fprintf (stdout, "Usage: %s [OPTION]... FILE\n", argv);
-    fprintf (stdout, "Display hex representation of bytes read from FILE.\n\n");
-    fprintf (stdout, "Mandatory arguments to long options are mandatory for ");
-    fprintf (stdout, "short options too.\n\n");
-    fprintf (stdout, "  -a, --address=ADDR         highlight WORD at ADDR\n");
-    fprintf (stdout, "  -1, --column               force one WORD column output\n");
-    fprintf (stdout, "  -r, --range=ADDR1-ADDR2    highlight WORDs in ADDR range\n");
-    fprintf (stdout, "  -W, --width=WIDTH          set line WIDTH (in bytes)\n");
-    fprintf (stdout, "  -w, --wordsize=SIZE        set WORD size to SIZE (in bytes)\n");
-    fprintf (stdout, "  -v, --verbose              enable operational verbosity\n");
-    fprintf (stdout, "  -h, --help                 display this usage information\n\n");
-    exit (0);
-}
-
-Node *add_node (Node *tmp, uint32_t address)
-{
-    if (list            == NULL)
-    {
-        list             = (Node *) malloc (sizeof (Node) * 1);
-        if (list        == NULL)
-        {
-            fprintf (stderr, "[add_node] ERROR: Could not allocate for list\n");
-            exit (1);
-        }
-
-        tmp              = list;
-    }
-    else
-    { 
-        tmp -> next      = (Node *) malloc (sizeof (Node) * 1);
-        if (tmp -> next == NULL)
-        {
-            fprintf (stderr, "[add_node] ERROR: Could not allocate for list node\n");
-            exit (2);
-        }
-
-        tmp              = tmp -> next;
-    }
-
-    tmp  -> addr         = address;
-    tmp  -> next         = NULL;
-
-    return (tmp);
-}
+////////////////////////////////////////////////////////////////////////////////////////
+//
+// Function prototypes
+//
+void  display_offset (int32_t, uint8_t);
+void  display_usage  (int8_t *);
+Node *add_node       (Node *,  uint32_t);
 
 int32_t  main (int argc, char **argv)
 {
@@ -217,12 +178,7 @@ int32_t  main (int argc, char **argv)
     //
     // Display offset header
     //
-    fprintf (stdout, "               ");
-    for (data = 0; data < linewidth; data++)
-    {
-        fprintf (stdout, "   +%-6u   ", data);
-    }
-    fprintf (stdout, "\n");
+	display_offset (wordsize, linewidth);
 
     ////////////////////////////////////////////////////////////////////////////////////
     //
@@ -495,32 +451,7 @@ int32_t  main (int argc, char **argv)
 
     } while (!feof (fptr));
 
-    ////////////////////////////////////////////////////////////////////////////////////
-    //
-    // Calculate and display offset footer
-    //
-	if ((wordsize % 2) == 0) // even
-	{
-		flag            = (((wordsize / 2) - 1) * 3) + 2;
-		size            = (wordsize   / 2) * 3;
-	}
-	else if (wordsize  == 1) // one
-	{
-		flag            = 0;
-		size            = 1;
-	}
-	else // all other odds
-	{
-		flag            = ((wordsize / 2) * 3) + 1;
-		size            = ((wordsize / 2) * 3) + 1;
-	}
-
-    fprintf (stdout, "             ");
-    for (data = 0; data < linewidth; data++)
-    {
-        fprintf (stdout, "%*c+%-u%*c", flag, ' ', data, size, ' ');
-    }
-    fprintf (stdout, "\n");
+    display_offset (wordsize, linewidth);
 
     free (line);
 
@@ -528,3 +459,89 @@ int32_t  main (int argc, char **argv)
 
     return (0);
 }
+
+void display_offset (int32_t  wordsize, uint8_t  linewidth)
+{
+    ////////////////////////////////////////////////////////////////////////////////////
+    //
+    // Declare and initialize variables
+    //
+    uint8_t  leftpad    = 0;
+    uint8_t  rightpad   = 0;
+    int32_t  index      = 0;
+
+    ////////////////////////////////////////////////////////////////////////////////////
+    //
+    // Calculate and display offset footer
+    //
+    if ((wordsize % 2) == 0) // even
+    {
+        leftpad         = (((wordsize / 2) - 1) * 3) + 2;
+        rightpad        = (wordsize   / 2) * 3;
+    }
+    else if (wordsize  == 1) // one
+    {
+        leftpad         = 0;
+        rightpad        = 1;
+    }
+    else // all other odds
+    {
+        leftpad         = ((wordsize / 2) * 3) + 1;
+        rightpad        = ((wordsize / 2) * 3) + 1;
+    }
+
+    fprintf (stdout, "             ");
+    for (index = 0; index < linewidth; index++)
+    {
+        fprintf (stdout, "%*c+%-u%*c", leftpad, ' ', index, rightpad, ' ');
+    }
+    fprintf (stdout, "\n");
+}
+
+void  display_usage (int8_t *argv)
+{
+    fprintf (stdout, "Usage: %s [OPTION]... FILE\n", argv);
+    fprintf (stdout, "Display hex representation of bytes read from FILE.\n\n");
+    fprintf (stdout, "Mandatory arguments to long options are mandatory for ");
+    fprintf (stdout, "short options too.\n\n");
+    fprintf (stdout, "  -a, --address=ADDR         highlight WORD at ADDR\n");
+    fprintf (stdout, "  -1, --column               force one WORD column output\n");
+    fprintf (stdout, "  -r, --range=ADDR1-ADDR2    highlight WORDs in ADDR range\n");
+    fprintf (stdout, "  -W, --width=WIDTH          set line WIDTH (in bytes)\n");
+    fprintf (stdout, "  -w, --wordsize=SIZE        set WORD size to SIZE (in bytes)\n");
+    fprintf (stdout, "  -v, --verbose              enable operational verbosity\n");
+    fprintf (stdout, "  -h, --help                 display this usage information\n\n");
+    exit (0);
+}
+
+Node *add_node (Node *tmp, uint32_t address)
+{
+    if (list            == NULL)
+    {
+        list             = (Node *) malloc (sizeof (Node) * 1);
+        if (list        == NULL)
+        {
+            fprintf (stderr, "[add_node] ERROR: Could not allocate for list\n");
+            exit (1);
+        }
+
+        tmp              = list;
+    }
+    else
+    { 
+        tmp -> next      = (Node *) malloc (sizeof (Node) * 1);
+        if (tmp -> next == NULL)
+        {
+            fprintf (stderr, "[add_node] ERROR: Could not allocate for list node\n");
+            exit (2);
+        }
+
+        tmp              = tmp -> next;
+    }
+
+    tmp  -> addr         = address;
+    tmp  -> next         = NULL;
+
+    return (tmp);
+}
+
