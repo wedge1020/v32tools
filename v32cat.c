@@ -497,12 +497,28 @@ int32_t  main (int argc, char **argv)
 
     ////////////////////////////////////////////////////////////////////////////////////
     //
-    // Display offset footer
+    // Calculate and display offset footer
     //
-    fprintf (stdout, "               ");
+	if ((wordsize % 2) == 0) // even
+	{
+		flag            = (((wordsize / 2) - 1) * 3) + 2;
+		size            = (wordsize   / 2) * 3;
+	}
+	else if (wordsize  == 1) // one
+	{
+		flag            = 0;
+		size            = 1;
+	}
+	else // all other odds
+	{
+		flag            = ((wordsize / 2) * 3) + 1;
+		size            = ((wordsize / 2) * 3) + 1;
+	}
+
+    fprintf (stdout, "             ");
     for (data = 0; data < linewidth; data++)
     {
-        fprintf (stdout, "   +%-6u   ", data);
+        fprintf (stdout, "%*c+%-u%*c", flag, ' ', data, size, ' ');
     }
     fprintf (stdout, "\n");
 
