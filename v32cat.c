@@ -17,6 +17,13 @@
 #include <string.h>
 #include <getopt.h>
 
+#define  V32_CART    1
+#define  V32_VBIN    2
+#define  V32_VSND    4
+#define  V32_VTEX    8
+#define  V32_MEMC    16
+#define  V32_BIOS    32
+
 typedef struct byte Byte;
 struct byte
 {
@@ -49,6 +56,9 @@ int32_t  main (int argc, char **argv)
     //
     FILE     *fptr                 = NULL; // input FILE pointer
     int8_t   *token                = NULL;
+    uint8_t   headerflag           = 0;
+    uint8_t   headertype           = 0;
+    uint8_t   dataflag             = 0;
     uint8_t   lineflag             = 0;
     uint8_t   flag                 = 0;
     uint8_t   size                 = 0;
@@ -216,11 +226,12 @@ int32_t  main (int argc, char **argv)
     // Continue until EOF or otherwise interrupted
     //
     offset                                    = start * wordsize;
+	pos                                       = 0;
     do
     {
         ////////////////////////////////////////////////////////////////////////////////
         //
-        // Read and file the line array
+        // Read from the file and build the line array
         //
         lineaddr                              = offset;
         for (index = 0; index < linewidth * wordsize; index++)
@@ -243,6 +254,75 @@ int32_t  main (int argc, char **argv)
             // Read a byte of data from the file
             //
             data                              = fgetc (fptr);
+
+            ////////////////////////////////////////////////////////////////////////////
+            //
+            // Check for V32 HEADER
+            //
+            if ((line+index) -> value        == HEADER[pos])
+            {
+                size                          = size + 1;
+                pos                           = pos  + 1;
+                
+                ////////////////////////////////////////////////////////////////////////
+                //
+                // If we have a match for a V32 HEADER, set lineflag and bail
+                //
+                if (size                     == 3)
+                {
+                    headerflag                = 2;
+                    lineflag                  = 9;
+					size                      = 0;
+                }
+            }
+
+            if (headerflag                   >  0)
+            {
+                headerflag                    = headerflag - 1;
+                if (headerflag               == 0)
+                {
+                    fprintf (stdout, "DATA is: %X\n", data);
+                    switch (data)
+                    {
+                        case 'A': // C-A-RT
+                            fprintf (stdout, "DETECTED V32 CART\n");
+                            headertype        = V32_CART;
+                            dataflag          = 14;
+                            break;
+
+                        case 'B': // V-B-IN
+                            headertype        = V32_VBIN;
+                            dataflag          = 1;
+                            break;
+
+                        case 'S': // V-S-ND
+                            headertype        = V32_VSND;
+                            dataflag          = 1;
+                            break;
+
+                        case 'T': // V-T-EX
+                            headertype        = V32_VTEX;
+                            dataflag          = 2;
+                            break;
+
+                        case 'E': // M-E-MC
+                            headertype        = V32_MEMC;
+                            dataflag          = 0;
+                            break;
+
+                        case 'I': // B-I-OS
+                            headertype        = V32_VTEX;
+                            dataflag          = 14;
+                            break;
+
+                        default:
+                            fprintf (stdout, "HEADERTYPE hit default\n");
+                            headertype        = 0;
+                            dataflag          = 0;
+                            break;
+                    }
+                }
+            }
 
             ////////////////////////////////////////////////////////////////////////////
             //
@@ -306,6 +386,7 @@ int32_t  main (int argc, char **argv)
         //
         // Check the current line for a V32 HEADER
         //
+		/*
         data                                  = 0;
         pos                                   = 0;
         for (index = 0; index < (wordsize * linewidth); index++)
@@ -321,6 +402,7 @@ int32_t  main (int argc, char **argv)
                 //
                 if (data                     == 3)
                 {
+                    headerflag                = 2;
                     lineflag                  = 9;
                     break;
                 }
@@ -330,7 +412,7 @@ int32_t  main (int argc, char **argv)
                 data                          = 0;
                 pos                           = 0;
             }
-        }
+        }*/
 
         ////////////////////////////////////////////////////////////////////////////////
         //
@@ -398,6 +480,37 @@ int32_t  main (int argc, char **argv)
 
                 ////////////////////////////////////////////////////////////////////////
                 //
+                // Check for V32 HEADER data highlighting
+                //
+                else if (dataflag            >  1)
+                {
+                    switch (headertype)
+                    {
+                        case V32_CART:
+                        case V32_BIOS:
+                            if (flag         == 0)
+                            {
+                                fprintf (stdout, "\e[1;34m");
+                                flag          = 1;
+                            }
+                            break;
+
+                        case V32_VBIN:
+                            break;
+                        
+                        case V32_VSND:
+                            break;
+
+                        case V32_VTEX:
+                            break;
+
+                        case V32_MEMC:
+                            break;    
+                    }
+                }
+
+                ////////////////////////////////////////////////////////////////////////
+                //
                 // Check for V32 HEADER highlighting
                 //
                 else if (lineflag            >  1)
@@ -421,6 +534,28 @@ int32_t  main (int argc, char **argv)
                 if (lineflag                 >  1)
                 {
                     fprintf (stdout, "%2c ",    (line+index) -> value);
+                }
+                else if (dataflag            >  0)
+                {
+                    switch (headertype)
+                    {
+                        case V32_CART:
+                        case V32_BIOS:
+							fprintf (stdout, "%2u ",    (line+index) -> value);
+                            break;
+
+                        case V32_VBIN:
+                            break;
+                        
+                        case V32_VSND:
+                            break;
+
+                        case V32_VTEX:
+                            break;
+
+                        case V32_MEMC:
+                            break;    
+                    }
                 }
                 else
                 {
@@ -452,6 +587,17 @@ int32_t  main (int argc, char **argv)
                 if (lineflag                 >  1)
                 {
                     lineflag                  = lineflag - 1;
+                }
+
+                ////////////////////////////////////////////////////////////////////////
+                //
+                // When dealing with V32 header DATA, dataflag serves as a counter
+                // to highlight bytes; decrement it by one as a byte has just been
+                // displayed
+                //
+                if (dataflag                 >  1)
+                {
+                    dataflag                  = dataflag - 1;
                 }
 
                 ////////////////////////////////////////////////////////////////////////
