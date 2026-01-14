@@ -321,7 +321,7 @@ int32_t  main (int argc, char **argv)
                 //
                 if (data                     == 3)
                 {
-                    lineflag                  = 8;
+                    lineflag                  = 9;
                     break;
                 }
             }
@@ -385,16 +385,6 @@ int32_t  main (int argc, char **argv)
             {
                 ////////////////////////////////////////////////////////////////////////
                 //
-                // Check for V32 HEADER highlighting
-                //
-                if (lineflag                 >  1)
-                {
-                    fprintf (stdout, "\e[1;31m");
-                    flag                      = 1;
-                }
-                
-                ////////////////////////////////////////////////////////////////////////
-                //
                 // Check for address highlight match: enable if confirmed
                 //
                 if ((line+index) -> flag     == 1)
@@ -405,6 +395,17 @@ int32_t  main (int argc, char **argv)
                         flag                  = 1;
                     }
                 }
+
+                ////////////////////////////////////////////////////////////////////////
+                //
+                // Check for V32 HEADER highlighting
+                //
+                else if (lineflag            >  1)
+                {
+                    fprintf (stdout, "\e[1;31m");
+                    flag                      = 1;
+                }
+
                 else
                 {
                     flag                      = 0;
@@ -414,7 +415,14 @@ int32_t  main (int argc, char **argv)
                 //
                 // Display the byte of data
                 //
-                fprintf (stdout, "%.2hhX ", (line+index) -> value);
+                if (lineflag                 >  1)
+                {
+                    fprintf (stdout, "%2c ",    (line+index) -> value);
+                }
+                else
+                {
+                    fprintf (stdout, "%.2hhX ", (line+index) -> value);
+                }
                 (line+index) -> value         = 0;
                 (line+index) -> flag          = 0;
 
