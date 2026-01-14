@@ -61,6 +61,7 @@ int32_t  main (int argc, char **argv)
     uint8_t   dataflag             = 0;
     uint8_t   lineflag             = 0;
     uint8_t   flag                 = 0;
+    uint8_t   count                = 0;
     uint8_t   size                 = 0;
     uint8_t   pos                  = 0;
     int32_t   data                 = 0;        // variable holding input
@@ -226,7 +227,7 @@ int32_t  main (int argc, char **argv)
     // Continue until EOF or otherwise interrupted
     //
     offset                                    = start * wordsize;
-	pos                                       = 0;
+    pos                                       = 0;
     do
     {
         ////////////////////////////////////////////////////////////////////////////////
@@ -259,20 +260,30 @@ int32_t  main (int argc, char **argv)
             //
             // Check for V32 HEADER
             //
-            if ((line+index) -> value        == HEADER[pos])
+            if (headerflag                   == 0)
             {
-                size                          = size + 1;
-                pos                           = pos  + 1;
-                
-                ////////////////////////////////////////////////////////////////////////
-                //
-                // If we have a match for a V32 HEADER, set lineflag and bail
-                //
-                if (size                     == 3)
+                if (data                     == HEADER[pos])
                 {
-                    headerflag                = 2;
-                    lineflag                  = 9;
-					size                      = 0;
+                    fprintf (stdout, "DING %c\n", HEADER[pos]);
+                    count                     = count + 1;
+                    pos                       = pos   + 1;
+                
+                    ////////////////////////////////////////////////////////////////////
+                    //
+                    // If we have a match for a V32 HEADER, set lineflag and bail
+                    //
+                    if (count                == 3)
+                    {
+                        headerflag            = 4;
+                        lineflag              = 9;
+                        count                 = 0;
+                        pos                   = 0;
+                    }
+                }
+                else
+                {
+                    count                     = 0;
+                    pos                       = 0;
                 }
             }
 
@@ -386,7 +397,7 @@ int32_t  main (int argc, char **argv)
         //
         // Check the current line for a V32 HEADER
         //
-		/*
+        /*
         data                                  = 0;
         pos                                   = 0;
         for (index = 0; index < (wordsize * linewidth); index++)
@@ -535,13 +546,14 @@ int32_t  main (int argc, char **argv)
                 {
                     fprintf (stdout, "%2c ",    (line+index) -> value);
                 }
+
                 else if (dataflag            >  0)
                 {
                     switch (headertype)
                     {
                         case V32_CART:
                         case V32_BIOS:
-							fprintf (stdout, "%2u ",    (line+index) -> value);
+                            fprintf (stdout, "%2u ",    (line+index) -> value);
                             break;
 
                         case V32_VBIN:
