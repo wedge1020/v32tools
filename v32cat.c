@@ -39,7 +39,7 @@ Node *list;
 //
 void  display_offset (int32_t, uint8_t);
 void  display_usage  (int8_t *);
-Node *add_node       (Node *,  uint32_t);
+void  add_node       (uint32_t);
 
 int32_t  main (int argc, char **argv)
 {
@@ -57,7 +57,8 @@ int32_t  main (int argc, char **argv)
     int32_t   incomplete           = -1;
     uint32_t  lineaddr             = 0;        // start of line address
     uint32_t  offset               = 0;        // count of input bytes
-    uint32_t  start                = 0;        // count of input bytes
+    uint32_t  start                = 0;        // starting address
+    uint32_t  stop                 = 0;        // ending address
     uint32_t  bound                = 0;
     int32_t   index                = 0;
     int32_t   opt                  = 0;
@@ -79,6 +80,8 @@ int32_t  main (int argc, char **argv)
        { "address",  required_argument, 0, 'a' },
        { "column",   no_argument,       0, '1' },
        { "range",    required_argument, 0, 'r' },
+       { "start",    required_argument, 0, 's' },
+       { "stop",     required_argument, 0, 'S' },
        { "width",    required_argument, 0, 'W' },
        { "wordsize", required_argument, 0, 'w' },
        { "help",     no_argument,       0, 'h' },
@@ -91,7 +94,7 @@ int32_t  main (int argc, char **argv)
     // Process command-line arguments, via getopt(3)
     //
     opt                            = getopt_long (argc, argv,
-                                                  "a:1r:W:w:hv",
+                                                  "a:1r:s:S:W:w:hv",
                                                   long_options,
                                                   &option_index);
     while (opt                    != -1)
@@ -104,7 +107,7 @@ int32_t  main (int argc, char **argv)
 
             case 'a':
                 offset             = strtol (optarg, NULL, 16);
-                tmp                = add_node (tmp, offset);
+                add_node (offset);
                 break;
 
             case 'r':
@@ -116,7 +119,26 @@ int32_t  main (int argc, char **argv)
 
                 for (index = offset; index <= bound; index++)
                 {
-                    tmp            = add_node (tmp, index);
+                    add_node (index);
+                }
+                break;
+
+            case 's':
+                start              = strtol (optarg, NULL, 16);
+                if ((stop         >  0) &&
+                    (stop         <  start))
+                {
+                    fprintf (stderr, "[error] start address larger than end\n");
+                    start          = 0;
+                }
+                break;
+
+            case 'S':
+                stop               = strtol (optarg, NULL, 16);
+                if (stop          <  start)
+                {
+                    fprintf (stderr, "[error] end address smaller than start\n");
+                    stop           = 0;
                 }
                 break;
 
@@ -146,7 +168,7 @@ int32_t  main (int argc, char **argv)
                 break;
         }
         opt                        = getopt_long (argc, argv,
-                                                  "a:1r:W:w:hv",
+                                                  "a:1r:s:S:W:w:hv",
                                                   long_options,
                                                   &option_index);
     }
@@ -176,15 +198,24 @@ int32_t  main (int argc, char **argv)
 
     ////////////////////////////////////////////////////////////////////////////////////
     //
+    // Seek to starting offset (if specified)
+    //
+    if (start                                >  0)
+    {
+        fseek (fptr, (start * wordsize), SEEK_SET);
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////////
+    //
     // Display offset header
     //
-	display_offset (wordsize, linewidth);
+    display_offset (wordsize, linewidth);
 
     ////////////////////////////////////////////////////////////////////////////////////
     //
     // Continue until EOF or otherwise interrupted
     //
-    offset                                    = start;
+    offset                                    = start * wordsize;
     do
     {
         ////////////////////////////////////////////////////////////////////////////////
@@ -194,6 +225,19 @@ int32_t  main (int argc, char **argv)
         lineaddr                              = offset;
         for (index = 0; index < linewidth * wordsize; index++)
         {
+            ////////////////////////////////////////////////////////////////////////////
+            //
+            // If we have an upper bound address that is not EOF (stop argument set),
+            // check to see if we have hit it, bail out if so
+            //
+            if (stop                         >  0)
+            {
+                if ((offset / wordsize)      >  stop)
+                {
+                    fseek (fptr, 0, SEEK_END);
+                }
+            }
+
             ////////////////////////////////////////////////////////////////////////////
             //
             // Read a byte of data from the file
@@ -453,6 +497,18 @@ int32_t  main (int argc, char **argv)
 
     display_offset (wordsize, linewidth);
 
+    ////////////////////////////////////////////////////////////////////////////////////
+    //
+    // De-allocate the list nodes
+    //
+    tmp                                       = list;
+    while (list                              != NULL)
+    {
+        list                                  = list -> next;
+        free (tmp);
+        tmp                                   = list;
+    }
+
     free (line);
 
     fclose (fptr);
@@ -507,6 +563,8 @@ void  display_usage (int8_t *argv)
     fprintf (stdout, "  -a, --address=ADDR         highlight WORD at ADDR\n");
     fprintf (stdout, "  -1, --column               force one WORD column output\n");
     fprintf (stdout, "  -r, --range=ADDR1-ADDR2    highlight WORDs in ADDR range\n");
+    fprintf (stdout, "  -s, --start=ADDR           start processing at ADDR\n");
+    fprintf (stdout, "  -S, --stop=ADDR            stop processing at ADDR\n");
     fprintf (stdout, "  -W, --width=WIDTH          set line WIDTH (in bytes)\n");
     fprintf (stdout, "  -w, --wordsize=SIZE        set WORD size to SIZE (in bytes)\n");
     fprintf (stdout, "  -v, --verbose              enable operational verbosity\n");
@@ -514,34 +572,89 @@ void  display_usage (int8_t *argv)
     exit (0);
 }
 
-Node *add_node (Node *tmp, uint32_t address)
+void  add_node (uint32_t address)
 {
-    if (list            == NULL)
+    Node *tmp                = NULL;
+    Node *tmp2               = NULL;
+
+    if (list                == NULL)
     {
-        list             = (Node *) malloc (sizeof (Node) * 1);
-        if (list        == NULL)
+        list                 = (Node *) malloc (sizeof (Node) * 1);
+        if (list            == NULL)
         {
             fprintf (stderr, "[add_node] ERROR: Could not allocate for list\n");
             exit (1);
         }
 
-        tmp              = list;
+        list -> addr         = address;
+        list -> next         = NULL;
     }
     else
-    { 
-        tmp -> next      = (Node *) malloc (sizeof (Node) * 1);
-        if (tmp -> next == NULL)
+    {
+        tmp                  = list;
+
+        tmp2                 = (Node *) malloc (sizeof (Node) * 1);
+        if (tmp2            == NULL)
         {
             fprintf (stderr, "[add_node] ERROR: Could not allocate for list node\n");
             exit (2);
         }
 
-        tmp              = tmp -> next;
+        tmp2 -> addr         = address;
+        tmp2 -> next         = NULL;
+
+        ////////////////////////////////////////////////////////////////////////////////
+        //
+        // If the new address belongs at the start of the list (being the lowest)
+        //
+        if (address         <  tmp -> addr)
+        {
+            tmp2 -> next     = list;
+            list             = tmp2;
+        }
+        else
+        {
+            ////////////////////////////////////////////////////////////////////////////
+            //
+            // Check if the new address has already been placed in the list
+            //
+            while (tmp -> next  != NULL)
+            {
+                ////////////////////////////////////////////////////////////////////////
+                //
+                // If we have a match, set tmp to NULL and break out of the loop
+                //
+                if (address     == tmp -> addr)
+                {
+                    free (tmp2);
+                    tmp2         = NULL;
+                    break;
+                }
+
+                ////////////////////////////////////////////////////////////////////////
+                //
+                // If address is less than the address of the current node, break
+                // out of the loop here
+                //
+                if (address     <  tmp -> next -> addr)
+                {
+                    tmp2 -> next = tmp -> next;
+                    tmp  -> next = tmp2;
+                    tmp2         = NULL;
+                    break;
+                }
+
+                tmp              = tmp -> next;
+            }
+
+            ////////////////////////////////////////////////////////////////////////////
+            //
+            // If no assignment has taken place, slap it on the end
+            //
+            if (tmp2            != NULL)
+            {
+                tmp -> next      = tmp2;
+            }
+        }
     }
-
-    tmp  -> addr         = address;
-    tmp  -> next         = NULL;
-
-    return (tmp);
 }
-
