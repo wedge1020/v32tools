@@ -17,12 +17,19 @@
 #include <string.h>
 #include <getopt.h>
 
-#define  V32_CART    1
-#define  V32_VBIN    2
-#define  V32_VSND    4
-#define  V32_VTEX    8
-#define  V32_MEMC    16
-#define  V32_BIOS    32
+#define  V32_CART     1
+#define  V32_VBIN     2
+#define  V32_VSND     4
+#define  V32_VTEX     8
+#define  V32_MEMC     16
+#define  V32_BIOS     32
+
+#define  WORD_CLEAR   0
+#define  WORD_HOLD    1
+#define  WORD_NEW     2
+
+#define  WORD_LITTLE  0
+#define  WORD_BIG     1
 
 typedef struct byte Byte;
 struct byte
@@ -47,7 +54,7 @@ Node *list;
 void      add_node       (uint32_t);
 void      display_offset (int32_t,  uint8_t);
 void      display_usage  (int8_t *);
-uint32_t  get_word       (Byte *,   int32_t);
+uint32_t  get_word       (Byte *,   int32_t, uint8_t);
 uint8_t  *get_str_word   (Byte *,   int32_t);
 
 int32_t  main (int argc, char **argv)
@@ -62,7 +69,9 @@ int32_t  main (int argc, char **argv)
     uint8_t   headertype           = 0;
     uint8_t   dataflag             = 0;
     uint8_t   lineflag             = 0;
-    uint8_t   wordflag             = 0;
+    uint8_t   wordflag             = WORD_CLEAR;
+    uint8_t   progressflag         = 0;
+    uint8_t   renderflag           = 1;
     uint8_t   flag                 = 0;
     uint8_t   count                = 0;
     uint8_t   size                 = 0;
@@ -93,6 +102,7 @@ int32_t  main (int argc, char **argv)
     struct option long_options[]   = {
        { "address",  required_argument, 0, 'a' },
        { "column",   no_argument,       0, '1' },
+       { "decode",   no_argument,       0, 'd' },
        { "range",    required_argument, 0, 'r' },
        { "start",    required_argument, 0, 's' },
        { "stop",     required_argument, 0, 'S' },
@@ -108,7 +118,7 @@ int32_t  main (int argc, char **argv)
     // Process command-line arguments, via getopt(3)
     //
     opt                            = getopt_long (argc, argv,
-                                                  "a:1r:s:S:W:w:hv",
+                                                  "a:1dr:s:S:W:w:hv",
                                                   long_options,
                                                   &option_index);
     while (opt                    != -1)
@@ -122,6 +132,11 @@ int32_t  main (int argc, char **argv)
             case 'a':
                 offset             = strtol (optarg, NULL, 16);
                 add_node (offset);
+                break;
+
+            case 'd':
+                linewidth          = 1;
+                renderflag         = 0;
                 break;
 
             case 'r':
@@ -182,7 +197,7 @@ int32_t  main (int argc, char **argv)
                 break;
         }
         opt                        = getopt_long (argc, argv,
-                                                  "a:1r:s:S:W:w:hv",
+                                                  "a:1dr:s:S:W:w:hv",
                                                   long_options,
                                                   &option_index);
     }
@@ -527,6 +542,15 @@ int32_t  main (int argc, char **argv)
 
                 ////////////////////////////////////////////////////////////////////////
                 //
+                // Collect the current word bytes into one integer
+                //
+                if (wordflag                 == WORD_NEW)
+                {
+                    data                      = get_word (line, index, WORD_BIG);
+                }
+
+                ////////////////////////////////////////////////////////////////////////
+                //
                 // Display the byte of data
                 //
                 if (lineflag                 >  1)
@@ -539,14 +563,14 @@ int32_t  main (int argc, char **argv)
                 // Display the header data contents
                 //
                 else if ((dataflag           >  0) &&
-                         (wordflag           == 0))
+                         (wordflag           != WORD_HOLD))
                 {
-                    wordflag                  = 1;
+                    wordflag                  = WORD_HOLD;
                     switch (headertype)
                     {
                         case V32_CART:
                         case V32_BIOS:
-                            opt               = get_word (line, index);
+                            opt               = get_word (line, index, WORD_LITTLE);
                             switch (dataflag)
                             {
                                 case 30: // Vircon32 version
@@ -616,7 +640,7 @@ int32_t  main (int argc, char **argv)
                             break;
 
                         case V32_VBIN:
-                            opt               = get_word (line, index);
+                            opt               = get_word (line, index, WORD_LITTLE);
                             fprintf (stdout, "size: %.5X ", opt);
                             break;
                         
@@ -624,7 +648,7 @@ int32_t  main (int argc, char **argv)
                             break;
 
                         case V32_VTEX:
-                            opt               = get_word (line, index);
+                            opt               = get_word (line, index, WORD_LITTLE);
                             switch (dataflag)
                             {
                                 case 2: // width
@@ -656,7 +680,7 @@ int32_t  main (int argc, char **argv)
                 //
                 else
                 {
-                    if (wordflag             == 0)
+                    if (wordflag             != WORD_HOLD)
                     {
                         fprintf (stdout, "%.2hhX ", (line+index) -> value);
                     }
@@ -664,9 +688,8 @@ int32_t  main (int argc, char **argv)
 
                 ////////////////////////////////////////////////////////////////////////
                 //
-                // Clear the current array entry
+                // Clear the current array entry flag
                 //
-                (line+index) -> value         = 0;
                 (line+index) -> flag          = 0;
 
                 ////////////////////////////////////////////////////////////////////////
@@ -677,12 +700,12 @@ int32_t  main (int argc, char **argv)
                 {
                     fprintf (stdout, " ");
                     if ((flag                == 1) ||
-                       (wordflag             == 1))
+                       (wordflag             == WORD_HOLD))
                     {
                         fprintf (stdout, "\e[m");
                         flag                  = 0;
                     }
-                    wordflag                  = 0;
+                    wordflag                  = WORD_NEW;
                 }
 
                 ////////////////////////////////////////////////////////////////////////
@@ -723,18 +746,25 @@ int32_t  main (int argc, char **argv)
 
         ////////////////////////////////////////////////////////////////////////////////
         //
-        // Check for line address highlight: if enabled, do the escape sequence
+        // right side offset rendering
         //
-        if (lineflag                         >  0)
+        if (renderflag                       == 1)
         {
-            fprintf (stdout, "\e[1;33m");
-        }
+            ////////////////////////////////////////////////////////////////////////////
+            //
+            // Check for line address highlight: if enabled, do the escape sequence
+            //
+            if (lineflag                         >  0)
+            {
+                fprintf (stdout, "\e[1;33m");
+            }
 
-        ////////////////////////////////////////////////////////////////////////////////
-        //
-        // Display right side offset
-        //
-        fprintf (stdout, "[0x%.8X]\n", (offset - 1) / wordsize);
+            ////////////////////////////////////////////////////////////////////////////
+            //
+            // Display right side offset
+            //
+            fprintf (stdout, "[0x%.8X]\n", (offset - 1) / wordsize);
+        }
 
         ////////////////////////////////////////////////////////////////////////////////
         //
@@ -748,6 +778,18 @@ int32_t  main (int argc, char **argv)
                 lineflag                      = 0;
             }
         }
+
+        if ((headertype                      == V32_VBIN) &&
+            (renderflag                      == 0))
+        {
+            fprintf (stdout, "0x%.8X\n", data);
+        }
+
+        ////////////////////////////////////////////////////////////////////////////////
+        //
+        // Clear current line array entry
+        //
+        (line+index) -> value                 = 0;
 
     } while (!feof (fptr));
 
@@ -919,7 +961,7 @@ void  add_node (uint32_t address)
 //
 // get_word(): assemble individual bytes in a word into an integer
 //
-uint32_t  get_word (Byte *line, int32_t  offset)
+uint32_t  get_word (Byte *line, int32_t  offset, uint8_t flag)
 {
     int32_t   index  = 0;
     uint32_t  data   = 0;
@@ -927,9 +969,18 @@ uint32_t  get_word (Byte *line, int32_t  offset)
 
     for (index = 0; index < 4; index++)
     {
-        data         = (line+offset+index) -> value;
-        data         = data << (8 * index);
-        word         = word | data;
+        if (flag    == WORD_LITTLE)
+        {
+            data     = (line+offset+index) -> value;
+            data     = data << (8 * index);
+            word     = word | data;
+        }
+        else
+        {
+            data     = (line+offset+index) -> value;
+            data     = data << (24 - (index * 8));
+            word     = word | data;
+        }
     }
 
     return (word);
