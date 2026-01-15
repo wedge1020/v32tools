@@ -27,6 +27,7 @@
 #define  WORD_CLEAR   0
 #define  WORD_HOLD    1
 #define  WORD_NEW     2
+#define  WORD_LOCK    3
 
 #define  WORD_LITTLE  0
 #define  WORD_BIG     1
@@ -77,6 +78,7 @@ int32_t  main (int argc, char **argv)
     uint8_t   size                 = 0;
     uint8_t   pos                  = 0;
     int32_t   data                 = 0;        // variable holding input
+    uint32_t  word                 = 0;        // variable holding condensed word
     int32_t   incomplete           = -1;
     uint32_t  lineaddr             = 0;        // start of line address
     uint32_t  offset               = 0;        // count of input bytes
@@ -546,7 +548,8 @@ int32_t  main (int argc, char **argv)
                 //
                 if (wordflag                 == WORD_NEW)
                 {
-                    data                      = get_word (line, index, WORD_BIG);
+                    word                      = get_word (line, index, WORD_LITTLE);
+                    wordflag                  = WORD_LOCK;
                 }
 
                 ////////////////////////////////////////////////////////////////////////
@@ -570,61 +573,55 @@ int32_t  main (int argc, char **argv)
                     {
                         case V32_CART:
                         case V32_BIOS:
-                            opt               = get_word (line, index, WORD_LITTLE);
+                            word              = get_word (line, index, WORD_LITTLE);
                             switch (dataflag)
                             {
                                 case 30: // Vircon32 version
-                                    fprintf (stdout, "v32 ver:%3u ", opt);
+                                    fprintf (stdout, "v32 ver:%3u ", word);
                                     break;
 
                                 case 29: // Vircon32 revision
-                                    fprintf (stdout, "v32 rev:%3u ", opt);
+                                    fprintf (stdout, "v32 rev:%3u ", word);
                                     break;
 
                                 case 12: // ROM version
-                                    fprintf (stdout, "ROM ver:%3u ", opt);
+                                    fprintf (stdout, "ROM ver:%3u ", word);
                                     break;
 
                                 case 11: // ROM revision
-                                    fprintf (stdout, "ROM rev:%3u ", opt);
+                                    fprintf (stdout, "ROM rev:%3u ", word);
                                     break;
 
                                 case 10: // number of textures
-                                    fprintf (stdout, "# VTEX: %3u ", opt);
+                                    fprintf (stdout, "# VTEX: %3u ", word);
                                     break;
 
                                 case 9: // number of sounds
-                                    fprintf (stdout, "# VSND: %3u ", opt);
+                                    fprintf (stdout, "# VSND: %3u ", word);
                                     break;
 
                                 case 8: // Program ROM offset
-                                    opt       = opt * -1;
-                                    fprintf (stdout, "ROM: 0x%.4X ", (opt / wordsize));
+                                    fprintf (stdout, "ROM: 0x%.4X ", (word / wordsize));
                                     break;
 
                                 case 7: // Program ROM size
-                                    opt       = opt * -1;
-                                    fprintf (stdout, "size:%.6X ",    opt);
+                                    fprintf (stdout, "size:%.6X ",    word);
                                     break;
 
                                 case 6: // Video ROM offset
-                                    opt       = opt * -1;
-                                    fprintf (stdout, "VO:%.8X ",     (opt / wordsize));
+                                    fprintf (stdout, "VO:%.8X ",     (word / wordsize));
                                     break;
 
                                 case 5: // Video ROM size
-                                    opt       = opt * -1;
-                                    fprintf (stdout, "VS:%.8X ",     (opt / wordsize));
+                                    fprintf (stdout, "VS:%.8X ",     (word / wordsize));
                                     break;
 
                                 case 4: // Audio ROM offset
-                                    opt       = opt * -1;
-                                    fprintf (stdout, "AO:%.8X ",     (opt / wordsize));
+                                    fprintf (stdout, "AO:%.8X ",     (word / wordsize));
                                     break;
 
                                 case 3: // Audio ROM size
-                                    opt       = opt * -1;
-                                    fprintf (stdout, "AS:%.8X ",     (opt / wordsize));
+                                    fprintf (stdout, "AS:%.8X ",     (word / wordsize));
                                     break;
 
                                 case 2: // Reserved
@@ -640,23 +637,23 @@ int32_t  main (int argc, char **argv)
                             break;
 
                         case V32_VBIN:
-                            opt               = get_word (line, index, WORD_LITTLE);
-                            fprintf (stdout, "size: %.5X ", opt);
+                            word              = get_word (line, index, WORD_LITTLE);
+                            fprintf (stdout, "size: %.5X ", word);
                             break;
                         
                         case V32_VSND:
                             break;
 
                         case V32_VTEX:
-                            opt               = get_word (line, index, WORD_LITTLE);
+                            word              = get_word (line, index, WORD_LITTLE);
                             switch (dataflag)
                             {
                                 case 2: // width
-                                    fprintf (stdout, "%9u x ",    opt);
+                                    fprintf (stdout, "%9u x ",    word);
                                     break;
 
                                 case 1: // height
-                                    fprintf (stdout, "%-11u ",    opt);
+                                    fprintf (stdout, "%-11u ",    word);
                                     break;
                             }
                             break;
@@ -768,6 +765,23 @@ int32_t  main (int argc, char **argv)
 
         ////////////////////////////////////////////////////////////////////////////////
         //
+        // Handle decoding mode
+        //
+        else
+        {
+            if ((headertype                      == V32_VBIN) &&
+                ((offset / wordsize)             >  0x23))
+            {
+                fprintf (stdout, "0x%.8X\n", word);
+            }
+            else
+            {
+                fprintf (stdout, "\n");
+            }
+        }
+
+        ////////////////////////////////////////////////////////////////////////////////
+        //
         // Check for line address highlight: if enabled, wrap the escape sequence
         //
         if (lineflag                         >  0)
@@ -777,12 +791,6 @@ int32_t  main (int argc, char **argv)
             {
                 lineflag                      = 0;
             }
-        }
-
-        if ((headertype                      == V32_VBIN) &&
-            (renderflag                      == 0))
-        {
-            fprintf (stdout, "0x%.8X\n", data);
         }
 
         ////////////////////////////////////////////////////////////////////////////////
@@ -860,6 +868,7 @@ void  display_usage (int8_t *argv)
     fprintf (stdout, "short options too.\n\n");
     fprintf (stdout, "  -a, --address=ADDR         highlight WORD at ADDR\n");
     fprintf (stdout, "  -1, --column               force one WORD column output\n");
+    fprintf (stdout, "  -d, --decode               decode instructions in-line\n");
     fprintf (stdout, "  -r, --range=ADDR1-ADDR2    highlight WORDs in ADDR range\n");
     fprintf (stdout, "  -s, --start=ADDR           start processing at ADDR\n");
     fprintf (stdout, "  -S, --stop=ADDR            stop processing at ADDR\n");
@@ -965,23 +974,44 @@ uint32_t  get_word (Byte *line, int32_t  offset, uint8_t flag)
 {
     int32_t   index  = 0;
     uint32_t  data   = 0;
+    uint32_t  shift  = 0;
     uint32_t  word   = 0;
+
+    /*
+    data             = (uint32_t) (line+offset+0) -> value;
+    data             = data << 24;
+    word             = word | data;
+    fprintf (stdout, "[start] data: %.2X, word: %.2X\n", data, word);
+    data             = (uint32_t) (line+offset+1) -> value;
+    data             = data << 16;
+    word             = word | data;
+    fprintf (stdout, "[2nd]   data: %.2X, word: %.2X\n", data, word);
+    data             = (uint32_t) (line+offset+2) -> value;
+    data             = data << 8;
+    word             = word | data;
+    fprintf (stdout, "[3rd]   data: %.2X, word: %.2X\n", data, word);
+    data             = (uint32_t) (line+offset+3) -> value;
+    word             = word | data;
+    fprintf (stdout, "[final] data: %.2X, word: %.2X\n", data, word);
+    */
 
     for (index = 0; index < 4; index++)
     {
+        data         = (uint32_t) (line+offset+index) -> value;
+        data         = data & 0x000000FF;
         if (flag    == WORD_LITTLE)
         {
-            data     = (line+offset+index) -> value;
-            data     = data << (8 * index);
-            word     = word | data;
+            shift    = index * 8;
         }
         else
         {
-            data     = (line+offset+index) -> value;
-            data     = data << (24 - (index * 8));
-            word     = word | data;
+            shift    = 24 - (index * 8);
         }
+        data         = data << shift;
+        word         = word | data;
+        //fprintf (stdout, "[%d] data: %.8X, word: %.8X\n", index, data, word);
     }
+    //fprintf (stdout, "[final] word: %.8X\n", word);
 
     return (word);
 }
