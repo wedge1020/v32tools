@@ -44,9 +44,10 @@ Node *list;
 //
 // Function prototypes
 //
-void  display_offset (int32_t, uint8_t);
-void  display_usage  (int8_t *);
-void  add_node       (uint32_t);
+void      add_node       (uint32_t);
+void      display_offset (int32_t,    uint8_t);
+void      display_usage  (int8_t   *);
+uint32_t  get_word       (Byte     *, int32_t);
 
 int32_t  main (int argc, char **argv)
 {
@@ -60,6 +61,7 @@ int32_t  main (int argc, char **argv)
     uint8_t   headertype           = 0;
     uint8_t   dataflag             = 0;
     uint8_t   lineflag             = 0;
+    uint8_t   wordflag             = 0;
     uint8_t   flag                 = 0;
     uint8_t   count                = 0;
     uint8_t   size                 = 0;
@@ -262,24 +264,33 @@ int32_t  main (int argc, char **argv)
             //
             if (headerflag                   == 0)
             {
+                ////////////////////////////////////////////////////////////////////////
+                //
+                // Check for potential match, which will be the result of several
+                // successive hits ('V', '3', '2', '-')
+                //
                 if (data                     == HEADER[pos])
                 {
-                    fprintf (stdout, "DING %c\n", HEADER[pos]);
                     count                     = count + 1;
                     pos                       = pos   + 1;
                 
                     ////////////////////////////////////////////////////////////////////
                     //
-                    // If we have a match for a V32 HEADER, set lineflag and bail
+                    // If we have enough to match a V32 HEADER, set lineflag and bail
                     //
                     if (count                == 3)
                     {
-                        headerflag            = 4;
-                        lineflag              = 9;
+                        headerflag            = 4; // our next target: header type
+                        lineflag              = 9; // highligh all 8 values
                         count                 = 0;
                         pos                   = 0;
                     }
                 }
+
+                ////////////////////////////////////////////////////////////////////////
+                //
+                // Matching has failed, reset
+                //
                 else
                 {
                     count                     = 0;
@@ -292,13 +303,12 @@ int32_t  main (int argc, char **argv)
                 headerflag                    = headerflag - 1;
                 if (headerflag               == 0)
                 {
-                    fprintf (stdout, "DATA is: %X\n", data);
                     switch (data)
                     {
                         case 'A': // C-A-RT
                             fprintf (stdout, "DETECTED V32 CART\n");
                             headertype        = V32_CART;
-                            dataflag          = 14;
+                            dataflag          = 29;
                             break;
 
                         case 'B': // V-B-IN
@@ -395,38 +405,6 @@ int32_t  main (int argc, char **argv)
 
         ////////////////////////////////////////////////////////////////////////////////
         //
-        // Check the current line for a V32 HEADER
-        //
-        /*
-        data                                  = 0;
-        pos                                   = 0;
-        for (index = 0; index < (wordsize * linewidth); index++)
-        {
-            if ((line+index) -> value        == HEADER[pos])
-            {
-                data                          = data + 1;
-                pos                           = pos  + 1;
-                
-                ////////////////////////////////////////////////////////////////////////
-                //
-                // If we have a match for a V32 HEADER, set lineflag and bail
-                //
-                if (data                     == 3)
-                {
-                    headerflag                = 2;
-                    lineflag                  = 9;
-                    break;
-                }
-            }
-            else
-            {
-                data                          = 0;
-                pos                           = 0;
-            }
-        }*/
-
-        ////////////////////////////////////////////////////////////////////////////////
-        //
         // Check for line address highlight: if enabled, do the escape sequence
         //
         if (lineflag                         >  0)
@@ -491,6 +469,19 @@ int32_t  main (int argc, char **argv)
 
                 ////////////////////////////////////////////////////////////////////////
                 //
+                // Check for V32 HEADER highlighting
+                //
+                else if (lineflag            >  1)
+                {
+                    if (flag                 == 0)
+                    {
+                        fprintf (stdout, "\e[1;31m");
+                        flag                  = 1;
+                    }
+                }
+
+                ////////////////////////////////////////////////////////////////////////
+                //
                 // Check for V32 HEADER data highlighting
                 //
                 else if (dataflag            >  1)
@@ -501,12 +492,17 @@ int32_t  main (int argc, char **argv)
                         case V32_BIOS:
                             if (flag         == 0)
                             {
-                                fprintf (stdout, "\e[1;34m");
+                                fprintf (stdout, "\e[1;35m");
                                 flag          = 1;
                             }
                             break;
 
                         case V32_VBIN:
+                            if (flag         == 0)
+                            {
+                                fprintf (stdout, "\e[1;34m");
+                                flag          = 1;
+                            }
                             break;
                         
                         case V32_VSND:
@@ -522,17 +518,8 @@ int32_t  main (int argc, char **argv)
 
                 ////////////////////////////////////////////////////////////////////////
                 //
-                // Check for V32 HEADER highlighting
+                // Otherwise, no special formatting
                 //
-                else if (lineflag            >  1)
-                {
-                    if (flag                 == 0)
-                    {
-                        fprintf (stdout, "\e[1;31m");
-                        flag                  = 1;
-                    }
-                }
-
                 else
                 {
                     flag                      = 0;
@@ -547,16 +534,49 @@ int32_t  main (int argc, char **argv)
                     fprintf (stdout, "%2c ",    (line+index) -> value);
                 }
 
-                else if (dataflag            >  0)
+                ////////////////////////////////////////////////////////////////////////
+                //
+                // Display the header data contents
+                //
+                else if ((dataflag           >  0) &&
+                         (wordflag           == 0))
                 {
                     switch (headertype)
                     {
                         case V32_CART:
                         case V32_BIOS:
-                            fprintf (stdout, "%2u ",    (line+index) -> value);
+							opt               = get_word (line, index);
+							switch (dataflag)
+							{
+								case 29:
+									fprintf (stdout, "version %3u ", opt);
+									break;
+
+								case 28:
+									fprintf (stdout, "revision%3u ", opt);
+									break;
+
+								case 11:
+									fprintf (stdout, "ROM ver:%3u ", opt);
+									break;
+
+								case 10:
+									fprintf (stdout, "ROM rev:%3u ", opt);
+									break;
+
+								case 9:
+									fprintf (stdout, "# VTEX: %3u ", opt);
+									break;
+
+								case 8:
+									fprintf (stdout, "# VSND: %3u ", opt);
+									break;
+                            }
+                            wordflag          = 1;
                             break;
 
                         case V32_VBIN:
+                            fprintf (stdout, "%2X ",    (line+index) -> value);
                             break;
                         
                         case V32_VSND:
@@ -568,7 +588,19 @@ int32_t  main (int argc, char **argv)
                         case V32_MEMC:
                             break;    
                     }
+                    ////////////////////////////////////////////////////////////////////
+                    //
+                    // When dealing with V32 header DATA, dataflag serves
+                    // as a  counter to highlight bytes;  decrement it by
+                    // one as a byte has just been displayed
+                    //
+                    dataflag                  = dataflag - 1;
                 }
+                else if ((dataflag           >  0) &&
+                         (wordflag           == 1))
+                {
+					; // do nothing
+				}
                 else
                 {
                     fprintf (stdout, "%.2hhX ", (line+index) -> value);
@@ -588,6 +620,7 @@ int32_t  main (int argc, char **argv)
                         fprintf (stdout, "\e[m");
                         flag                  = 0;
                     }
+                    wordflag                  = 0;
                 }
 
                 ////////////////////////////////////////////////////////////////////////
@@ -599,17 +632,6 @@ int32_t  main (int argc, char **argv)
                 if (lineflag                 >  1)
                 {
                     lineflag                  = lineflag - 1;
-                }
-
-                ////////////////////////////////////////////////////////////////////////
-                //
-                // When dealing with V32 header DATA, dataflag serves as a counter
-                // to highlight bytes; decrement it by one as a byte has just been
-                // displayed
-                //
-                if (dataflag                 >  1)
-                {
-                    dataflag                  = dataflag - 1;
                 }
 
                 ////////////////////////////////////////////////////////////////////////
@@ -829,4 +851,24 @@ void  add_node (uint32_t address)
             }
         }
     }
+}
+
+////////////////////////////////////////////////////////////////////////////
+//
+// get_word(): assemble individual bytes in a word into an integer
+//
+uint32_t  get_word (Byte *line, int32_t  offset)
+{
+    int32_t   index   = 0;
+    uint32_t  data    = 0;
+    uint32_t  word    = 0;
+
+    for (index = 0; index < 4; index++)
+    {
+        data      = (line+offset+index) -> value;
+        data      = data << (8 * index);
+        word      = word | data;
+    }
+
+    return (word);
 }
