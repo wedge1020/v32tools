@@ -45,9 +45,10 @@ Node *list;
 // Function prototypes
 //
 void      add_node       (uint32_t);
-void      display_offset (int32_t,    uint8_t);
-void      display_usage  (int8_t   *);
-uint32_t  get_word       (Byte     *, int32_t);
+void      display_offset (int32_t,  uint8_t);
+void      display_usage  (int8_t *);
+uint32_t  get_word       (Byte *,   int32_t);
+uint8_t  *get_str_word   (Byte *,   int32_t);
 
 int32_t  main (int argc, char **argv)
 {
@@ -306,9 +307,8 @@ int32_t  main (int argc, char **argv)
                     switch (data)
                     {
                         case 'A': // C-A-RT
-                            fprintf (stdout, "DETECTED V32 CART\n");
                             headertype        = V32_CART;
-                            dataflag          = 29;
+                            dataflag          = 30;
                             break;
 
                         case 'B': // V-B-IN
@@ -323,16 +323,16 @@ int32_t  main (int argc, char **argv)
 
                         case 'T': // V-T-EX
                             headertype        = V32_VTEX;
-                            dataflag          = 2;
+                            dataflag          = 1;
                             break;
 
                         case 'E': // M-E-MC
                             headertype        = V32_MEMC;
-                            dataflag          = 0;
+                            dataflag          = 1;
                             break;
 
                         case 'I': // B-I-OS
-                            headertype        = V32_VTEX;
+                            headertype        = V32_BIOS;
                             dataflag          = 14;
                             break;
 
@@ -484,7 +484,7 @@ int32_t  main (int argc, char **argv)
                 //
                 // Check for V32 HEADER data highlighting
                 //
-                else if (dataflag            >  1)
+                else if (dataflag            >  0)
                 {
                     switch (headertype)
                     {
@@ -541,53 +541,106 @@ int32_t  main (int argc, char **argv)
                 else if ((dataflag           >  0) &&
                          (wordflag           == 0))
                 {
+                    wordflag                  = 1;
                     switch (headertype)
                     {
                         case V32_CART:
                         case V32_BIOS:
-							opt               = get_word (line, index);
-							switch (dataflag)
-							{
-								case 29:
-									fprintf (stdout, "version %3u ", opt);
-									break;
+                            opt               = get_word (line, index);
+                            switch (dataflag)
+                            {
+                                case 30: // Vircon32 version
+                                    fprintf (stdout, "v32 ver:%3u ", opt);
+                                    break;
 
-								case 28:
-									fprintf (stdout, "revision%3u ", opt);
-									break;
+                                case 29: // Vircon32 revision
+                                    fprintf (stdout, "v32 rev:%3u ", opt);
+                                    break;
 
-								case 11:
-									fprintf (stdout, "ROM ver:%3u ", opt);
-									break;
+                                case 12: // ROM version
+                                    fprintf (stdout, "ROM ver:%3u ", opt);
+                                    break;
 
-								case 10:
-									fprintf (stdout, "ROM rev:%3u ", opt);
-									break;
+                                case 11: // ROM revision
+                                    fprintf (stdout, "ROM rev:%3u ", opt);
+                                    break;
 
-								case 9:
-									fprintf (stdout, "# VTEX: %3u ", opt);
-									break;
+                                case 10: // number of textures
+                                    fprintf (stdout, "# VTEX: %3u ", opt);
+                                    break;
 
-								case 8:
-									fprintf (stdout, "# VSND: %3u ", opt);
-									break;
+                                case 9: // number of sounds
+                                    fprintf (stdout, "# VSND: %3u ", opt);
+                                    break;
+
+                                case 8: // Program ROM offset
+                                    opt       = opt * -1;
+                                    fprintf (stdout, "ROM: 0x%.4X ", (opt / wordsize));
+                                    break;
+
+                                case 7: // Program ROM size
+                                    opt       = opt * -1;
+                                    fprintf (stdout, "size:%.6X ",    opt);
+                                    break;
+
+                                case 6: // Video ROM offset
+                                    opt       = opt * -1;
+                                    fprintf (stdout, "VO:%.8X ",     (opt / wordsize));
+                                    break;
+
+                                case 5: // Video ROM size
+                                    opt       = opt * -1;
+                                    fprintf (stdout, "VS:%.8X ",     (opt / wordsize));
+                                    break;
+
+                                case 4: // Audio ROM offset
+                                    opt       = opt * -1;
+                                    fprintf (stdout, "AO:%.8X ",     (opt / wordsize));
+                                    break;
+
+                                case 3: // Audio ROM size
+                                    opt       = opt * -1;
+                                    fprintf (stdout, "AS:%.8X ",     (opt / wordsize));
+                                    break;
+
+                                case 2: // Reserved
+                                case 1: // Reserved
+                                    fprintf (stdout, "%-11s ",       "[reserved]");
+                                    break;
+
+                                default: // CART name
+                                    token     = get_str_word (line, index);
+                                    fprintf (stdout, "%-11s ",  token);
+                                    break;
                             }
-                            wordflag          = 1;
                             break;
 
                         case V32_VBIN:
-                            fprintf (stdout, "%2X ",    (line+index) -> value);
+                            opt               = get_word (line, index);
+                            fprintf (stdout, "size: %.5X ", opt);
                             break;
                         
                         case V32_VSND:
                             break;
 
                         case V32_VTEX:
+                            opt               = get_word (line, index);
+                            switch (dataflag)
+                            {
+                                case 2: // width
+                                    fprintf (stdout, "%9u x ",    opt);
+                                    break;
+
+                                case 1: // height
+                                    fprintf (stdout, "%-11u ",    opt);
+                                    break;
+                            }
                             break;
 
                         case V32_MEMC:
                             break;    
                     }
+
                     ////////////////////////////////////////////////////////////////////
                     //
                     // When dealing with V32 header DATA, dataflag serves
@@ -596,15 +649,23 @@ int32_t  main (int argc, char **argv)
                     //
                     dataflag                  = dataflag - 1;
                 }
-                else if ((dataflag           >  0) &&
-                         (wordflag           == 1))
-                {
-					; // do nothing
-				}
+
+                ////////////////////////////////////////////////////////////////////////
+                //
+                // otherwise: a standard byte to display
+                //
                 else
                 {
-                    fprintf (stdout, "%.2hhX ", (line+index) -> value);
+                    if (wordflag             == 0)
+                    {
+                        fprintf (stdout, "%.2hhX ", (line+index) -> value);
+                    }
                 }
+
+                ////////////////////////////////////////////////////////////////////////
+                //
+                // Clear the current array entry
+                //
                 (line+index) -> value         = 0;
                 (line+index) -> flag          = 0;
 
@@ -615,7 +676,8 @@ int32_t  main (int argc, char **argv)
                 if (((index + 1) % wordsize) == 0)
                 {
                     fprintf (stdout, " ");
-                    if (flag                 == 1)
+                    if ((flag                == 1) ||
+                       (wordflag             == 1))
                     {
                         fprintf (stdout, "\e[m");
                         flag                  = 0;
@@ -859,16 +921,38 @@ void  add_node (uint32_t address)
 //
 uint32_t  get_word (Byte *line, int32_t  offset)
 {
-    int32_t   index   = 0;
-    uint32_t  data    = 0;
-    uint32_t  word    = 0;
+    int32_t   index  = 0;
+    uint32_t  data   = 0;
+    uint32_t  word   = 0;
 
     for (index = 0; index < 4; index++)
     {
-        data      = (line+offset+index) -> value;
-        data      = data << (8 * index);
-        word      = word | data;
+        data         = (line+offset+index) -> value;
+        data         = data << (8 * index);
+        word         = word | data;
     }
+
+    return (word);
+}
+
+////////////////////////////////////////////////////////////////////////////
+//
+// get_str_word(): assemble individual bytes in a word into a string
+//
+uint8_t  *get_str_word (Byte *line, int32_t  offset)
+{
+    int32_t   index        = 0;
+    uint32_t  data         = 0;
+    uint8_t   pos          = 0;
+    uint8_t   word[12];
+
+    for (index = 0; index < 4; index++)
+    {
+        word[(3*index)+0]  = ' ';
+        word[(3*index)+1]  = (line+offset+index) -> value;
+        word[(3*index)+2]  = ' ';
+    }
+    word[11]               = '\0';
 
     return (word);
 }
