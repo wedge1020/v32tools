@@ -46,6 +46,14 @@ struct node
     Node     *next;
 };
 
+struct string_data
+{
+    int8_t  name[40];
+    int8_t  lower;
+    int8_t  upper;
+};
+typedef struct string_data String_data;
+
 Node *list;
  
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -53,10 +61,12 @@ Node *list;
 // Function prototypes
 //
 void      add_node       (uint32_t);
+void      decode_instruction (uint32_t, uint32_t);
 void      display_offset (int32_t,  uint8_t);
 void      display_usage  (int8_t *);
 uint32_t  get_word       (Byte *,   int32_t, uint8_t);
 uint8_t  *get_str_word   (Byte *,   int32_t);
+void      rev_word       (Byte *,   Byte *,  uint8_t);
 
 int32_t  main (int argc, char **argv)
 {
@@ -65,20 +75,24 @@ int32_t  main (int argc, char **argv)
     // Declare and initialize variables
     //
     FILE     *fptr                 = NULL; // input FILE pointer
+    FILE     *iptr                 = NULL; // input FILE pointer
     int8_t   *token                = NULL;
     uint8_t   headerflag           = 0;
     uint8_t   headertype           = 0;
     uint8_t   dataflag             = 0;
     uint8_t   lineflag             = 0;
+    uint8_t   skipflag             = 0;
     uint8_t   wordflag             = WORD_CLEAR;
     uint8_t   progressflag         = 0;
     uint8_t   renderflag           = 1;
     uint8_t   flag                 = 0;
     uint8_t   count                = 0;
+    uint8_t   immflag              = 0;
     uint8_t   size                 = 0;
     uint8_t   pos                  = 0;
     int32_t   data                 = 0;        // variable holding input
     uint32_t  word                 = 0;        // variable holding condensed word
+    uint32_t  immval               = 0;        // variable holding condensed word
     int32_t   incomplete           = -1;
     uint32_t  lineaddr             = 0;        // start of line address
     uint32_t  offset               = 0;        // count of input bytes
@@ -92,6 +106,9 @@ int32_t  main (int argc, char **argv)
     int32_t   this_option_optind   = optind ? optind : 1;
     int32_t   option_index         = 0;
     Byte     *line                 = NULL;     // array for line input
+    Byte     *line2                = NULL;     // array for line reversal
+    Byte     *immediate            = NULL;     // array for immediate data
+    Byte     *imm                  = NULL;              
     Node     *tmp                  = NULL;
     int8_t    HEADER[]             = { 'V', '3', '2', '-' };
 
@@ -215,6 +232,30 @@ int32_t  main (int argc, char **argv)
         fprintf (stderr, "[error] Could not allocate space for 'line'\n");
         exit (3);
     }
+
+    ////////////////////////////////////////////////////////////////////////////////////
+    //
+    // Allocate space for the line reversal array
+    //
+    size                                      = sizeof (Byte) * (wordsize * linewidth);
+    line2                                     = (Byte *) malloc (size);
+    if (line2                                == NULL)
+    {
+        fprintf (stderr, "[error] Could not allocate space for 'line2'\n");
+        exit (4);
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////////
+    //
+    // Allocate space for the immediate value
+    //
+    size                                      = sizeof (Byte) * (wordsize * linewidth);
+    immediate                                 = (Byte *) malloc (size);
+    if (immediate                            == NULL)
+    {
+        fprintf (stderr, "[error] Could not allocate space for 'immediate'\n");
+        exit (5);
+    }
     
     ////////////////////////////////////////////////////////////////////////////////////
     //
@@ -225,6 +266,17 @@ int32_t  main (int argc, char **argv)
     {
         fprintf (stderr, "[error] could not open '%s' for reading!\n", argv[optind]);
         exit (1);
+    }
+    
+    ////////////////////////////////////////////////////////////////////////////////////
+    //
+    // Open specified file (for immediate value access)
+    //
+    iptr                                      = fopen (argv[optind], "r");
+    if (iptr                                 == NULL)
+    {
+        fprintf (stderr, "[error] could not open '%s' for reading!\n", argv[optind]);
+        exit (2);
     }
 
     ////////////////////////////////////////////////////////////////////////////////////
@@ -549,6 +601,29 @@ int32_t  main (int argc, char **argv)
                 if (wordflag                 == WORD_NEW)
                 {
                     word                      = get_word (line, index, WORD_LITTLE);
+                    size                      = wordsize * linewidth;
+                    rev_word (line, line2, size);
+
+                    if (headertype           == V32_VBIN)
+                    {
+                        immflag               = (word & 0x02000000) >> 25;
+                        if (immflag          == 1)
+                        {
+                            fseek (iptr, ftell (fptr), SEEK_SET);
+                            for (count = 0; count < wordsize; count++)
+                            {
+                                imm           = (immediate+count);
+                                data          = fgetc(iptr);
+                                imm -> value  = data;
+                            }
+                            immval            = get_word (immediate, 0, WORD_LITTLE);
+                        }
+                        else
+                        {
+                            immflag           = 0;
+                            immval            = 0;
+                        }
+                    }
                     wordflag                  = WORD_LOCK;
                 }
 
@@ -679,7 +754,14 @@ int32_t  main (int argc, char **argv)
                 {
                     if (wordflag             != WORD_HOLD)
                     {
-                        fprintf (stdout, "%.2hhX ", (line+index) -> value);
+                        if (headertype       != V32_VBIN)
+                        {
+                            fprintf (stdout, "%.2hhX ", (line+index) -> value);
+                        }
+                        else
+                        {
+                            fprintf (stdout, "%.2hhX ", (line2+index) -> value); 
+                        }
                     }
                 }
 
@@ -772,7 +854,20 @@ int32_t  main (int argc, char **argv)
             if ((headertype                      == V32_VBIN) &&
                 ((offset / wordsize)             >  0x23))
             {
-                fprintf (stdout, "0x%.8X\n", word);
+                if (skipflag                     == 0)
+                {
+                    decode_instruction (word, immval);
+                    if (immflag                  == 1)
+                    {
+                        skipflag                  = 1;
+                    }
+                }
+                else
+                {
+                    fprintf (stdout, "\n");
+                    immflag                       = 0;
+                    skipflag                      = 0;
+                }
             }
             else
             {
@@ -816,6 +911,7 @@ int32_t  main (int argc, char **argv)
     }
 
     free (line);
+    free (immediate);
 
     fclose (fptr);
 
@@ -966,7 +1062,7 @@ void  add_node (uint32_t address)
     }
 }
 
-////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////
 //
 // get_word(): assemble individual bytes in a word into an integer
 //
@@ -976,24 +1072,6 @@ uint32_t  get_word (Byte *line, int32_t  offset, uint8_t flag)
     uint32_t  data   = 0;
     uint32_t  shift  = 0;
     uint32_t  word   = 0;
-
-    /*
-    data             = (uint32_t) (line+offset+0) -> value;
-    data             = data << 24;
-    word             = word | data;
-    fprintf (stdout, "[start] data: %.2X, word: %.2X\n", data, word);
-    data             = (uint32_t) (line+offset+1) -> value;
-    data             = data << 16;
-    word             = word | data;
-    fprintf (stdout, "[2nd]   data: %.2X, word: %.2X\n", data, word);
-    data             = (uint32_t) (line+offset+2) -> value;
-    data             = data << 8;
-    word             = word | data;
-    fprintf (stdout, "[3rd]   data: %.2X, word: %.2X\n", data, word);
-    data             = (uint32_t) (line+offset+3) -> value;
-    word             = word | data;
-    fprintf (stdout, "[final] data: %.2X, word: %.2X\n", data, word);
-    */
 
     for (index = 0; index < 4; index++)
     {
@@ -1009,14 +1087,12 @@ uint32_t  get_word (Byte *line, int32_t  offset, uint8_t flag)
         }
         data         = data << shift;
         word         = word | data;
-        //fprintf (stdout, "[%d] data: %.8X, word: %.8X\n", index, data, word);
     }
-    //fprintf (stdout, "[final] word: %.8X\n", word);
 
     return (word);
 }
 
-////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////
 //
 // get_str_word(): assemble individual bytes in a word into a string
 //
@@ -1036,4 +1112,383 @@ uint8_t  *get_str_word (Byte *line, int32_t  offset)
     word[11]               = '\0';
 
     return (word);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////
+//
+// decode and display instruction and associated data at provided address
+//
+void  decode_instruction (uint32_t word, uint32_t immediate_value)
+{
+    uint8_t   opcode     = 0;
+    uint8_t   immflag    = 0;
+    uint8_t   dstreg     = 0;
+    uint8_t   srcreg     = 0;
+    uint8_t   addrmode   = 0;
+    uint8_t   size       = 0;
+    uint8_t   flag       = 0;
+    uint8_t   category   = 0;
+    uint8_t   attribute  = 0;
+    uint16_t  portnum    = 0;
+    uint32_t  data[11];
+
+    ////////////////////////////////////////////////////////////////////////////////////
+    //
+    // initialize our opcodes array with the available instructions
+    //
+    String_data  opcodes[64]  =
+    {
+        { "HLT"  }, { "WAIT"  }, { "JMP"   }, { "CALL" },
+        { "RET"  }, { "JT"    }, { "JF"    }, { "IEQ"  },
+        { "INE"  }, { "IGT"   }, { "IGE"   }, { "ILT"  },
+        { "ILE"  }, { "FEQ"   }, { "FNE"   }, { "FGT"  },
+        { "FGE"  }, { "FLT"   }, { "FLE"   }, { "MOV"  },
+        { "LEA"  }, { "PUSH"  }, { "POP"   }, { "IN"   },
+        { "OUT"  }, { "MOVS"  }, { "SETS"  }, { "CMPS" },
+        { "CIF"  }, { "CFI"   }, { "CIB"   }, { "CFB"  },
+        { "NOT"  }, { "AND"   }, { "OR"    }, { "XOR"  },
+        { "BNOT" }, { "SHL"   }, { "IADD"  }, { "ISUB" },
+        { "IMUL" }, { "IDIV"  }, { "IMOD"  }, { "ISGN" },
+        { "IMIN" }, { "IMAX"  }, { "IABS"  }, { "FADD" },
+        { "FSUB" }, { "FMUL"  }, { "FDIV"  }, { "FMOD" },
+        { "FSGN" }, { "FMIN"  }, { "FMAX"  }, { "FABS" },
+        { "FLR"  }, { "CEIL"  }, { "ROUND" }, { "SIN"  },
+        { "ACOS" }, { "ATAN2" }, { "LOG"   }, { "POW"  }
+    };
+
+    ////////////////////////////////////////////////////////////////////////////////////
+    //
+    // initialize our port category arrays with the available port names
+    //
+    ////////////////////////////////////////////////////////////////////////////////////
+
+    ////////////////////////////////////////////////////////////////////////////////////
+    //
+    // time port names
+    //
+    String_data  tim_ports[4]   =
+    {
+        { "TIM_CurrentDate"          },
+        { "TIM_CurrentTime"          },
+        { "TIM_FrameCounter"         },
+        { "TIM_CycleCounter"         }
+    };
+
+    ////////////////////////////////////////////////////////////////////////////////////
+    //
+    // RNG port names
+    //
+    String_data  rng_ports[1]   =
+    {
+        { "RNG_CurrentValue"         }
+    };
+
+    ////////////////////////////////////////////////////////////////////////////////////
+    //
+    // GPU port names
+    //
+    String_data  gpu_ports[18]  =
+    {
+        { "GPU_Command"              },
+        { "GPU_RemainingPixels"      },
+        { "GPU_ClearColor"           },
+        { "GPU_MultiplyColor"        },
+        { "GPU_ActiveBlending"       },
+        { "GPU_SelectedTexture"      },
+        { "GPU_SelectedRegion"       },
+        { "GPU_DrawingPointX"        },
+        { "GPU_DrawingPointY"        },
+        { "GPU_DrawingScaleX"        },
+        { "GPU_DrawingScaleY"        },
+        { "GPU_DrawingAngle"         },
+        { "GPU_RegionMinX"           },
+        { "GPU_RegionMinY"           },
+        { "GPU_RegionMaxX"           },
+        { "GPU_RegionMaxY"           },
+        { "GPU_RegionHotspotX"       },
+        { "GPU_RegionHotspotY"       }
+    };
+
+    ////////////////////////////////////////////////////////////////////////////////////
+    //
+    // SPU port names
+    //
+    String_data  spu_ports[14]  =
+    {
+        { "SPU_Command"              },
+        { "SPU_GlobalVolume"         },
+        { "SPU_SelectedSound"        },
+        { "SPU_SelectedChannel"      },
+        { "SPU_SoundLength"          },
+        { "SPU_SoundPlayWithLoop"    },
+        { "SPU_SoundLoopStart"       },
+        { "SPU_SoundLoopEnd"         },
+        { "SPU_ChannelState"         },
+        { "SPU_ChannelAssignedSound" },
+        { "SPU_ChannelVolume"        },
+        { "SPU_ChannelSpeed"         },
+        { "SPU_ChannelLoopEnabled"   },
+        { "SPU_ChannelPosition"      }
+    };
+
+    ////////////////////////////////////////////////////////////////////////////////////
+    //
+    // INP port names
+    //
+    String_data  inp_ports[13]  =
+    {
+        { "INP_SelectedGamepad"      },
+        { "INP_GamepadConnected"     },
+        { "INP_GamepadLeft"          },
+        { "INP_GamepadRight"         },
+        { "INP_GamepadUp"            },
+        { "INP_GamepadDown"          },
+        { "INP_GamepadButtonStart"   },
+        { "INP_GamepadButtonA"       },
+        { "INP_GamepadButtonB"       },
+        { "INP_GamepadButtonX"       },
+        { "INP_GamepadButtonY"       },
+        { "INP_GamepadButtonL"       },
+        { "INP_GamepadButtonR"       }
+    };
+
+    ////////////////////////////////////////////////////////////////////////////////////
+    //
+    // CAR port names
+    //
+    String_data  car_ports[4]   =
+    {
+        { "CAR_Connected"            },
+        { "CAR_ProgramROMSize"       },
+        { "CAR_NumberOfTextures"     },
+        { "CAR_NumberOfSounds"       }
+    };
+
+    ////////////////////////////////////////////////////////////////////////////////////
+    //
+    // MEM port names
+    //
+    String_data  mem_ports[1]   =
+    {
+        { "MEM_Connected"            }
+    };
+
+    ////////////////////////////////////////////////////////////////////////////////////
+    //
+    // connect all the categories together
+    //
+    size                        = sizeof (String_data *) * 7;
+    String_data **port          = (String_data **) malloc (size);
+    *(port+0)                   = tim_ports;
+    *(port+1)                   = rng_ports;
+    *(port+2)                   = gpu_ports;
+    *(port+3)                   = spu_ports;
+    *(port+4)                   = inp_ports;
+    *(port+5)                   = car_ports;
+    *(port+6)                   = mem_ports;
+
+    ////////////////////////////////////////////////////////////////////////////////////
+    //
+    // mask out and obtain individual instruction elements
+    //
+    opcode                      = (word    & 0xFC000000) >> 26;
+    immflag                     = (word    & 0x02000000) >> 25;
+    dstreg                      = (word    & 0x01E00000) >> 21;
+    srcreg                      = (word    & 0x001E0000) >> 17;
+    addrmode                    = (word    & 0x0001C000) >> 14;
+    portnum                     = (word    & 0x00003FFF);
+
+    category                    = (portnum & 0x00000700) >> 8;
+    attribute                   = (portnum & 0x000000FF);
+
+    ////////////////////////////////////////////////////////////////////////////////////
+    //
+    // display the obtained instruction
+    //
+    fprintf (stdout, "%-5s ", opcodes[opcode].name);
+
+    ////////////////////////////////////////////////////////////////////////////////////
+    //
+    // special case processing:
+    //   * zero parameter instructions (we're done)
+    //   * one parameter instruction (display the first parameter and return)
+    //   * everything else is a two parameter instruction
+    //
+    switch (opcode)
+    {
+        // zero parameter instructions
+        case 0x00: // HLT
+        case 0x01: // WAIT
+        case 0x04: // RET
+        case 0x19: // MOVS
+        case 0x1A: // SETS
+            fprintf (stdout, "\n");
+            return;
+            break;
+
+        // one parameter instructions
+        case 0x02: // JMP
+        case 0x03: // CALL
+        case 0x15: // PUSH
+        case 0x16: // POP
+        case 0x1B: // CMPS
+        case 0x1C: // CIF
+        case 0x1D: // CFI
+        case 0x1E: // CIB
+        case 0x1F: // CFB
+        case 0x20: // NOT
+        case 0x24: // BNOT
+        case 0x2B: // ISGN
+        case 0x2E: // IABS
+        case 0x34: // FSGN
+        case 0x37: // FABS
+        case 0x38: // FLR
+        case 0x39: // CEIL
+        case 0x3A: // ROUND
+        case 0x3B: // SIN
+        case 0x3C: // ACOS
+        case 0x3E: // LOG
+            if (immflag        == 1)
+            {
+                fprintf (stdout, "0x%X\n", immediate_value);
+            }
+            else // register variant
+            {
+                fprintf (stdout, "R%hhu\n", dstreg);
+            }
+            return;
+            break;
+    };
+
+    ////////////////////////////////////////////////////////////////////////////////////
+    //
+    // ALL the first parameter processing for two parameter
+    // instructions (with special cases for MOV and OUT)
+    //
+    if (opcode                 == 0x13) // MOV
+    {
+        if (addrmode           >  4) // MOV addressing modes 5, 6, 7 we dereference
+        {
+            fprintf (stdout, "[");
+        }
+
+        if ((addrmode          == 5)  ||
+            (addrmode          == 7))
+        {
+            if (addrmode       == 7)
+            {
+                fprintf (stdout, "R%hhu+", srcreg);
+            }
+
+            // print out `immediate_value`
+            fprintf (stdout, "0x%X", immediate_value);
+        }
+        else // otherwise, a register reference is made
+        {
+            fprintf (stdout, "R%hhu", dstreg);
+        }
+
+        if (addrmode           >  4)
+        {
+            fprintf (stdout, "[");
+        }
+    }
+    else if (opcode            == 0x18) // OUT: first parameter is always a port number
+    {
+        fprintf (stdout, "%s", (*(port+category)+attribute) -> name);
+    }
+    else // AVERAGE CASE: any other two parameter instruction; show dstreg
+    {
+        fprintf (stdout, "R%hhu", dstreg);
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////////
+    //
+    // Display the parameter separating comma and space
+    //
+    fprintf (stdout, ", ");
+
+    ////////////////////////////////////////////////////////////////////////////////////
+    //
+    // Two parameter, second parameter display. Special cases for LEA, OUT
+    //
+    flag                        = 0;
+    if (opcode                 == 0x14) // LEA
+    {
+        fprintf (stdout, "[");
+        flag                    = 1;
+
+        if (immflag            == 1)
+        {
+            fprintf (stdout, "R%hhu+", srcreg);
+        }
+    }
+    else if (opcode            == 0x13) // MOV
+    {
+        if ((addrmode          >= 2)  &&
+            (addrmode          <= 4))
+        {
+            fprintf (stdout, "[");
+            flag                = 1;
+
+            if (addrmode       == 4)
+            {
+                fprintf (stdout, "R%hhu+", srcreg);
+            }
+        }
+        else if (addrmode      >= 5)
+        {
+            flag                = 2;
+        }
+    }
+    else if (opcode            == 0x18) // OUT special case (only if immflag is set)
+    {
+        if (immflag            == 1)
+        {
+            fprintf (stdout, "[");
+            flag                = 1;
+        }
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////////
+    //
+    // AVERAGE CASE (not MOV)
+    //
+    if ((immflag               == 1) &&
+        (flag                  != 2))   // immediate value variant
+    {
+        fprintf (stdout, "0x%X", immediate_value);
+    }
+    else if (opcode            == 0x17) // IN special case (port number)
+    {
+        fprintf (stdout, "%s", (*(port+category)+attribute) -> name);
+    }
+    else // register variant
+    {
+        fprintf (stdout, "R%hhu", srcreg);
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////////
+    //
+    // Wrapping up special case two parameter, second parameter edge cases
+    //
+    if (flag                   == 1)
+    {
+        fprintf (stdout, "]");
+    }
+
+    fprintf (stdout, "\n");
+}
+
+void  rev_word (Byte *line, Byte *line2, uint8_t  size)
+{
+    int32_t  index               = 0;
+    int32_t  offset              = size - 1;
+
+    for (index = 0; index < size; index++)
+    {
+        (line2+offset) -> value  = (line+index) -> value;
+        (line2+offset) -> flag   = (line+index) -> flag;
+        offset                   = offset - 1;
+    }
 }
