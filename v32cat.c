@@ -23,6 +23,7 @@
 #define  FANCY_COLORS   2
 #define  FANCY_ALWAYS   3
 
+#define  V32_NONE       0
 #define  V32_CART       1
 #define  V32_VBIN       2
 #define  V32_VSND       4
@@ -709,39 +710,6 @@ int32_t  main (int argc, char **argv)
                         }
                     }
 
-                    /*
-                    else if (headertype      == V32_VTEX)
-                    {
-                        if (fancyflag        != FANCY_NEVER)
-                        {
-                            switch (index % 4)
-                            {
-                                case 0:    // RED
-                                    fprintf (stdout, "\e[1;31m");
-                                    break;
-
-                                case 1:    // GREEN
-                                    fprintf (stdout, "\e[1;32m");
-                                    break;
-
-                                case 2:    // BLUE
-                                    fprintf (stdout, "\e[1;36m");
-                                    break;
-
-                                case 3:    // ALPHA
-                                    fprintf (stdout, "\e[1;37m");
-                                    break;
-                            }
-                        }
-
-                        fprintf (stdout, ">%.2hhX ", (line2+index) -> value); 
-
-                        if (fancyflag        != FANCY_NEVER)
-                        {
-                            fprintf (stdout, "\e[m");
-                        }
-                    }*/
-
                     wordflag                  = WORD_LOCK;
                 }
 
@@ -891,6 +859,31 @@ int32_t  main (int argc, char **argv)
                         {
                             case V32_VBIN:
                                 fprintf (stdout, "%.2hhX ", (line2+index) -> value); 
+                                break;
+
+                            case V32_VSND:
+                                if (fancyflag != FANCY_NEVER)
+                                {
+                                    switch (index % 4)
+                                    {
+                                        case 0:    // RED (right channel)
+                                        case 1:
+                                            fprintf (stdout, "\e[1;31m");
+                                            break;
+
+                                        case 2:    // CYAN (left channel)
+                                        case 3:
+                                            fprintf (stdout, "\e[1;36m");
+                                            break;
+                                    }
+
+                                    fprintf (stdout, "%.2hhX ", (line2+index) -> value);
+                                    fprintf (stdout, "\e[m");
+                                }
+                                else
+                                {
+                                    fprintf (stdout, "%.2hhX ", (line+index) -> value);
+                                }
                                 break;
 
                             case V32_VTEX:
