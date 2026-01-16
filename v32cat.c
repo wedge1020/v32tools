@@ -103,6 +103,7 @@ int32_t  main (int argc, char **argv)
     int32_t   incomplete           = -1;
     uint32_t  lineaddr             = 0;        // start of line address
     uint32_t  offset               = 0;        // count of input bytes
+    uint32_t  offsetmask           = 0;        // mask to apply to current offset
     uint32_t  start                = 0;        // starting address
     uint32_t  stop                 = 0;        // ending address
     uint32_t  bound                = 0;
@@ -130,7 +131,9 @@ int32_t  main (int argc, char **argv)
        { "colors",   no_argument,       0, 'c' },
        { "column",   no_argument,       0, '1' },
        { "decode",   no_argument,       0, 'd' },
-       { "force",    no_argument,       0, 'f' },
+       { "fancy",    no_argument,       0, 'f' },
+       { "file",     no_argument,       0, 'F' },
+       { "memory",   no_argument,       0, 'm' },
        { "range",    required_argument, 0, 'r' },
        { "raw",      no_argument,       0, 'R' },
        { "start",    required_argument, 0, 's' },
@@ -147,7 +150,7 @@ int32_t  main (int argc, char **argv)
     // Process command-line arguments, via getopt(3)
     //
     opt                            = getopt_long (argc, argv,
-                                                  "a:1cdfr:Rs:S:vW:w:h",
+                                                  "a:1cdfFmr:Rs:S:vW:w:h",
                                                   long_options,
                                                   &option_index);
     while (opt                    != -1)
@@ -174,6 +177,14 @@ int32_t  main (int argc, char **argv)
 
             case 'f':
                 fancyflag          = FANCY_ALWAYS;
+                break;
+
+            case 'F':
+                offsetmask         = 0x00000000;
+                break;
+
+            case 'm':
+                offsetmask         = 0x20000000;
                 break;
 
             case 'r':
@@ -431,7 +442,7 @@ int32_t  main (int argc, char **argv)
 
                         case 'T': // V-T-EX
                             headertype        = V32_VTEX;
-                            dataflag          = 1;
+                            dataflag          = 2;
                             break;
 
                         case 'E': // M-E-MC
@@ -527,7 +538,7 @@ int32_t  main (int argc, char **argv)
         //
         // Display left side offset
         //
-        fprintf (stdout, "[0x%.8X]  ", lineaddr / wordsize);
+        fprintf (stdout, "[0x%.8X]  ", (lineaddr / wordsize) | offsetmask);
 
         ////////////////////////////////////////////////////////////////////////////////
         //
@@ -632,9 +643,25 @@ int32_t  main (int argc, char **argv)
                             break;
                         
                         case V32_VSND:
+                            if (flag         == 0)
+                            {
+                                if (fancyflag != FANCY_NEVER)
+                                {
+                                    fprintf (stdout, "\e[1;33m");
+                                }
+                                flag          = 1;
+                            }
                             break;
 
                         case V32_VTEX:
+                            if (flag         == 0)
+                            {
+                                if (fancyflag != FANCY_NEVER)
+                                {
+                                    fprintf (stdout, "\e[1;36m");
+                                }
+                                flag          = 1;
+                            }
                             break;
 
                         case V32_MEMC:
@@ -681,6 +708,40 @@ int32_t  main (int argc, char **argv)
                             immval            = 0;
                         }
                     }
+
+                    /*
+                    else if (headertype      == V32_VTEX)
+                    {
+                        if (fancyflag        != FANCY_NEVER)
+                        {
+                            switch (index % 4)
+                            {
+                                case 0:    // RED
+                                    fprintf (stdout, "\e[1;31m");
+                                    break;
+
+                                case 1:    // GREEN
+                                    fprintf (stdout, "\e[1;32m");
+                                    break;
+
+                                case 2:    // BLUE
+                                    fprintf (stdout, "\e[1;36m");
+                                    break;
+
+                                case 3:    // ALPHA
+                                    fprintf (stdout, "\e[1;37m");
+                                    break;
+                            }
+                        }
+
+                        fprintf (stdout, ">%.2hhX ", (line2+index) -> value); 
+
+                        if (fancyflag        != FANCY_NEVER)
+                        {
+                            fprintf (stdout, "\e[m");
+                        }
+                    }*/
+
                     wordflag                  = WORD_LOCK;
                 }
 
@@ -694,9 +755,9 @@ int32_t  main (int argc, char **argv)
                     {
                         fprintf (stdout, "%2c ",   (line+index) -> value);
                     }
-					else
-					{
-                        fprintf (stdout, "%2hhx ", (line+index) -> value);
+                    else
+                    {
+                        fprintf (stdout, "%2hhX ", (line+index) -> value);
                     }
                 }
 
@@ -782,6 +843,13 @@ int32_t  main (int argc, char **argv)
                             break;
                         
                         case V32_VSND:
+                            word              = get_word (line, index, WORD_LITTLE);
+                            switch (dataflag)
+                            {
+                                case 1: // height
+                                    fprintf (stdout, "# %-9u ",    word);
+                                    break;
+                            }
                             break;
 
                         case V32_VTEX:
@@ -789,11 +857,11 @@ int32_t  main (int argc, char **argv)
                             switch (dataflag)
                             {
                                 case 2: // width
-                                    fprintf (stdout, "%9u x ",    word);
+                                    fprintf (stdout, "W: %6u x ",    word);
                                     break;
 
                                 case 1: // height
-                                    fprintf (stdout, "%-11u ",    word);
+                                    fprintf (stdout, "H: %-8u ",    word);
                                     break;
                             }
                             break;
@@ -819,17 +887,46 @@ int32_t  main (int argc, char **argv)
                 {
                     if (wordflag             != WORD_HOLD)
                     {
-                        if (headertype       != V32_VBIN)
+                        switch (headertype)
                         {
-                            fprintf (stdout, "%.2hhX ", (line+index) -> value);
-                        }
-                        else if (fancyflag   == FANCY_NEVER)
-                        {
-                            fprintf (stdout, "%.2hhX ", (line+index) -> value);
-                        }
-                        else // V32_VBIN
-                        {
-                            fprintf (stdout, "%.2hhX ", (line2+index) -> value); 
+                            case V32_VBIN:
+                                fprintf (stdout, "%.2hhX ", (line2+index) -> value); 
+                                break;
+
+                            case V32_VTEX:
+                                if (fancyflag != FANCY_NEVER)
+                                {
+                                    switch (index % 4)
+                                    {
+                                        case 0:    // RED
+                                            fprintf (stdout, "\e[1;31m");
+                                            break;
+
+                                        case 1:    // GREEN
+                                            fprintf (stdout, "\e[1;32m");
+                                            break;
+
+                                        case 2:    // BLUE
+                                            fprintf (stdout, "\e[1;34m");
+                                            break;
+
+                                        case 3:    // ALPHA
+                                            fprintf (stdout, "\e[1;37m");
+                                            break;
+                                    }
+
+                                    fprintf (stdout, "%.2hhX ", (line2+index) -> value);
+                                    fprintf (stdout, "\e[m");
+                                }
+                                else
+                                {
+                                    fprintf (stdout, "%.2hhX ", (line+index) -> value);
+                                }
+                                break;
+
+                            default:
+                                fprintf (stdout, "%.2hhX ", (line+index) -> value);
+                                break;
                         }
                     }
                 }
@@ -923,7 +1020,7 @@ int32_t  main (int argc, char **argv)
             //
             // Display right side offset
             //
-            fprintf (stdout, "[0x%.8X]\n", (offset - 1) / wordsize);
+            fprintf (stdout, "[0x%.8X]\n", ((offset - 1) / wordsize) | offsetmask);
         }
 
         ////////////////////////////////////////////////////////////////////////////////
@@ -1050,13 +1147,18 @@ void  display_usage (int8_t *argv)
     fprintf (stdout, "  -a, --address=ADDR         highlight WORD at ADDR\n");
     fprintf (stdout, "  -1, --column               force one WORD column output\n");
     fprintf (stdout, "  -d, --decode               decode instructions in-line\n");
+    fprintf (stdout, "  -f, --fancy                enable fancy content rendering\n");
+    fprintf (stdout, "  -F, --file                 reference offset from file\n");
+    fprintf (stdout, "  -m, --memory               reference offset from memory\n");
     fprintf (stdout, "  -r, --range=ADDR1-ADDR2    highlight WORDs in ADDR range\n");
+    fprintf (stdout, "  -R, --raw                  no fancy content or colors\n");
     fprintf (stdout, "  -s, --start=ADDR           start processing at ADDR\n");
     fprintf (stdout, "  -S, --stop=ADDR            stop processing at ADDR\n");
     fprintf (stdout, "  -W, --width=WIDTH          set line WIDTH (in bytes)\n");
     fprintf (stdout, "  -w, --wordsize=SIZE        set WORD size to SIZE (in bytes)\n");
     fprintf (stdout, "  -v, --verbose              enable operational verbosity\n");
     fprintf (stdout, "  -h, --help                 display this usage information\n\n");
+
     exit (0);
 }
 
@@ -1475,7 +1577,7 @@ void  decode (uint32_t word, uint32_t immediate_value)
 
         if (addrmode           >  4)
         {
-            fprintf (stdout, "[");
+            fprintf (stdout, "]");
         }
     }
     else if (opcode            == 0x18) // OUT: first parameter is always a port number
