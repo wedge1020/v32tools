@@ -58,7 +58,7 @@ is; to do that, we run **v32cat** with the `--raw` option:
 It  will  even get  fancy  with  VTEX  pixels, de-endianifying  them  and
 rendering them in the color of their respective channel:
 
-![v32cat vtex](screenshots/v32cat_vtex.jpg)
+![v32cat vtex](screenshots/v32cat_vtex.png)
 
 ## v32ls
 
