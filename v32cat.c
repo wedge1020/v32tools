@@ -14,23 +14,29 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
-#include <string.h>
 #include <getopt.h>
+#include <string.h>
+#include <unistd.h>
 
-#define  V32_CART     1
-#define  V32_VBIN     2
-#define  V32_VSND     4
-#define  V32_VTEX     8
-#define  V32_MEMC     16
-#define  V32_BIOS     32
+#define  FANCY_NEVER    0
+#define  FANCY_DEFAULT  1
+#define  FANCY_COLORS   2
+#define  FANCY_ALWAYS   3
 
-#define  WORD_CLEAR   0
-#define  WORD_HOLD    1
-#define  WORD_NEW     2
-#define  WORD_LOCK    3
+#define  V32_CART       1
+#define  V32_VBIN       2
+#define  V32_VSND       4
+#define  V32_VTEX       8
+#define  V32_MEMC       16
+#define  V32_BIOS       32
 
-#define  WORD_LITTLE  0
-#define  WORD_BIG     1
+#define  WORD_CLEAR     0
+#define  WORD_HOLD      1
+#define  WORD_NEW       2
+#define  WORD_LOCK      3
+
+#define  WORD_LITTLE    0
+#define  WORD_BIG       1
 
 typedef struct byte Byte;
 struct byte
@@ -61,7 +67,7 @@ Node *list;
 // Function prototypes
 //
 void      add_node       (uint32_t);
-void      decode_instruction (uint32_t, uint32_t);
+void      decode         (uint32_t, uint32_t);
 void      display_offset (int32_t,  uint8_t);
 void      display_usage  (int8_t *);
 uint32_t  get_word       (Byte *,   int32_t, uint8_t);
@@ -80,6 +86,7 @@ int32_t  main (int argc, char **argv)
     uint8_t   headerflag           = 0;
     uint8_t   headertype           = 0;
     uint8_t   dataflag             = 0;
+    uint8_t   fancyflag            = FANCY_DEFAULT;
     uint8_t   lineflag             = 0;
     uint8_t   skipflag             = 0;
     uint8_t   wordflag             = WORD_CLEAR;
@@ -120,15 +127,18 @@ int32_t  main (int argc, char **argv)
     //
     struct option long_options[]   = {
        { "address",  required_argument, 0, 'a' },
+       { "colors",   no_argument,       0, 'c' },
        { "column",   no_argument,       0, '1' },
        { "decode",   no_argument,       0, 'd' },
+       { "force",    no_argument,       0, 'f' },
        { "range",    required_argument, 0, 'r' },
+       { "raw",      no_argument,       0, 'R' },
        { "start",    required_argument, 0, 's' },
        { "stop",     required_argument, 0, 'S' },
+       { "verbose",  no_argument,       0, 'v' },
        { "width",    required_argument, 0, 'W' },
        { "wordsize", required_argument, 0, 'w' },
        { "help",     no_argument,       0, 'h' },
-       { "verbose",  no_argument,       0, 'v' },
        { 0,          0,                 0,  0  }
     };
 
@@ -137,7 +147,7 @@ int32_t  main (int argc, char **argv)
     // Process command-line arguments, via getopt(3)
     //
     opt                            = getopt_long (argc, argv,
-                                                  "a:1dr:s:S:W:w:hv",
+                                                  "a:1cdfr:Rs:S:vW:w:h",
                                                   long_options,
                                                   &option_index);
     while (opt                    != -1)
@@ -153,9 +163,17 @@ int32_t  main (int argc, char **argv)
                 add_node (offset);
                 break;
 
+            case 'c':
+                fancyflag          = FANCY_COLORS;
+                break;
+
             case 'd':
                 linewidth          = 1;
                 renderflag         = 0;
+                break;
+
+            case 'f':
+                fancyflag          = FANCY_ALWAYS;
                 break;
 
             case 'r':
@@ -169,6 +187,10 @@ int32_t  main (int argc, char **argv)
                 {
                     add_node (index);
                 }
+                break;
+
+            case 'R':
+                fancyflag          = FANCY_NEVER;
                 break;
 
             case 's':
@@ -188,6 +210,9 @@ int32_t  main (int argc, char **argv)
                     fprintf (stderr, "[error] end address smaller than start\n");
                     stop           = 0;
                 }
+                break;
+
+            case 'v':
                 break;
 
             case 'w':
@@ -211,14 +236,28 @@ int32_t  main (int argc, char **argv)
             case 'h':
                 display_usage (argv[0]);
                 break;
-
-            case 'v':
-                break;
         }
         opt                        = getopt_long (argc, argv,
-                                                  "a:1dr:s:S:W:w:hv",
+                                                  "a:1cdfr:Rs:S:vW:w:h",
                                                   long_options,
                                                   &option_index);
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////////
+    //
+    // Check that STDOUT (fd 1) is a genuine terminal
+    //
+    if (isatty (STDOUT_FILENO))
+    {
+        fprintf (stdout, "[verbose] standard terminal detected\n");
+    }
+    else
+    {
+        fprintf (stdout, "[verbose] pipe or file redirection detected\n");
+        if (fancyflag                        == FANCY_DEFAULT)
+        {
+            fancyflag                         = FANCY_NEVER;
+        }
     }
 
     ////////////////////////////////////////////////////////////////////////////////////
@@ -478,7 +517,10 @@ int32_t  main (int argc, char **argv)
         //
         if (lineflag                         >  0)
         {
-            fprintf (stdout, "\e[1;33m");
+            if (fancyflag                    != FANCY_NEVER)
+            {
+                fprintf (stdout, "\e[1;33m");
+            }
         }
 
         ////////////////////////////////////////////////////////////////////////////////
@@ -493,7 +535,10 @@ int32_t  main (int argc, char **argv)
         //
         if (lineflag                         >  0)
         {
-            fprintf (stdout, "\e[m");
+            if (fancyflag                    != FANCY_NEVER)
+            {
+                fprintf (stdout, "\e[m");
+            }
         }
 
         ////////////////////////////////////////////////////////////////////////////////
@@ -531,7 +576,10 @@ int32_t  main (int argc, char **argv)
                 {
                     if (flag                 == 0)
                     {
-                        fprintf (stdout, "\e[1;32m");
+                        if (fancyflag        != FANCY_NEVER)
+                        {
+                            fprintf (stdout, "\e[1;32m");
+                        }
                         flag                  = 1;
                     }
                 }
@@ -544,7 +592,10 @@ int32_t  main (int argc, char **argv)
                 {
                     if (flag                 == 0)
                     {
-                        fprintf (stdout, "\e[1;31m");
+                        if (fancyflag        != FANCY_NEVER)
+                        {
+                            fprintf (stdout, "\e[1;31m");
+                        }
                         flag                  = 1;
                     }
                 }
@@ -561,7 +612,10 @@ int32_t  main (int argc, char **argv)
                         case V32_BIOS:
                             if (flag         == 0)
                             {
-                                fprintf (stdout, "\e[1;35m");
+                                if (fancyflag != FANCY_NEVER)
+                                {
+                                    fprintf (stdout, "\e[1;35m");
+                                }
                                 flag          = 1;
                             }
                             break;
@@ -569,7 +623,10 @@ int32_t  main (int argc, char **argv)
                         case V32_VBIN:
                             if (flag         == 0)
                             {
-                                fprintf (stdout, "\e[1;34m");
+                                if (fancyflag != FANCY_NEVER)
+                                {
+                                    fprintf (stdout, "\e[1;34m");
+                                }
                                 flag          = 1;
                             }
                             break;
@@ -633,7 +690,14 @@ int32_t  main (int argc, char **argv)
                 //
                 if (lineflag                 >  1)
                 {
-                    fprintf (stdout, "%2c ",    (line+index) -> value);
+                    if (fancyflag            != FANCY_NEVER)
+                    {
+                        fprintf (stdout, "%2c ",   (line+index) -> value);
+                    }
+					else
+					{
+                        fprintf (stdout, "%2hhx ", (line+index) -> value);
+                    }
                 }
 
                 ////////////////////////////////////////////////////////////////////////
@@ -641,7 +705,8 @@ int32_t  main (int argc, char **argv)
                 // Display the header data contents
                 //
                 else if ((dataflag           >  0) &&
-                         (wordflag           != WORD_HOLD))
+                         (wordflag           != WORD_HOLD) &&
+                         (fancyflag          != FANCY_NEVER))
                 {
                     wordflag                  = WORD_HOLD;
                     switch (headertype)
@@ -758,7 +823,11 @@ int32_t  main (int argc, char **argv)
                         {
                             fprintf (stdout, "%.2hhX ", (line+index) -> value);
                         }
-                        else
+                        else if (fancyflag   == FANCY_NEVER)
+                        {
+                            fprintf (stdout, "%.2hhX ", (line+index) -> value);
+                        }
+                        else // V32_VBIN
                         {
                             fprintf (stdout, "%.2hhX ", (line2+index) -> value); 
                         }
@@ -781,7 +850,10 @@ int32_t  main (int argc, char **argv)
                     if ((flag                == 1) ||
                        (wordflag             == WORD_HOLD))
                     {
-                        fprintf (stdout, "\e[m");
+                        if (fancyflag        != FANCY_NEVER)
+                        {
+                            fprintf (stdout, "\e[m");
+                        }
                         flag                  = 0;
                     }
                     wordflag                  = WORD_NEW;
@@ -806,7 +878,10 @@ int32_t  main (int argc, char **argv)
                 {
                     if (flag                 == 1)
                     {
-                        fprintf (stdout, "\e[m");
+                        if (fancyflag        != FANCY_NEVER)
+                        {
+                            fprintf (stdout, "\e[m");
+                        }
                         flag                  = 0;
                     }
                 }
@@ -819,7 +894,10 @@ int32_t  main (int argc, char **argv)
         //
         if (flag                             == 1)
         {
-            fprintf (stdout, "\e[m");
+            if (fancyflag                    != FANCY_NEVER)
+            {
+                fprintf (stdout, "\e[m");
+            }
             flag                              = 0;
         }
 
@@ -833,9 +911,12 @@ int32_t  main (int argc, char **argv)
             //
             // Check for line address highlight: if enabled, do the escape sequence
             //
-            if (lineflag                         >  0)
+            if (lineflag                     >  0)
             {
-                fprintf (stdout, "\e[1;33m");
+                if (fancyflag                != FANCY_NEVER)
+                {
+                    fprintf (stdout, "\e[1;33m");
+                }
             }
 
             ////////////////////////////////////////////////////////////////////////////
@@ -856,7 +937,7 @@ int32_t  main (int argc, char **argv)
             {
                 if (skipflag                     == 0)
                 {
-                    decode_instruction (word, immval);
+                    decode (word, immval);
                     if (immflag                  == 1)
                     {
                         skipflag                  = 1;
@@ -881,7 +962,11 @@ int32_t  main (int argc, char **argv)
         //
         if (lineflag                         >  0)
         {
-            fprintf (stdout, "\e[m");
+            if (fancyflag                    != FANCY_NEVER)
+            {
+                fprintf (stdout, "\e[m");
+            }
+
             if (lineflag                     == 1)
             {
                 lineflag                      = 0;
@@ -1116,9 +1201,9 @@ uint8_t  *get_str_word (Byte *line, int32_t  offset)
 
 ////////////////////////////////////////////////////////////////////////////////////////
 //
-// decode and display instruction and associated data at provided address
+// decode(): decode and display instruction and associated data at provided address
 //
-void  decode_instruction (uint32_t word, uint32_t immediate_value)
+void  decode (uint32_t word, uint32_t immediate_value)
 {
     uint8_t   opcode     = 0;
     uint8_t   immflag    = 0;
