@@ -33,7 +33,7 @@
 
 #define  WORD_CLEAR     0
 #define  WORD_HOLD      1
-#define  WORD_NEW       2
+#define  NEW_WORD       0
 #define  WORD_LOCK      3
 
 #define  WORD_LITTLE    0
@@ -65,6 +65,8 @@ typedef struct string_data String_data;
 
 Node     *list;
 int32_t   incomplete;
+uint8_t   wordsize;
+uint8_t   linewidth;
 uint32_t  byteoffset;
 uint32_t  wordoffset;
  
@@ -74,10 +76,12 @@ uint32_t  wordoffset;
 //
 void      add_node       (uint32_t);
 void      decode         (uint32_t, uint32_t);
-void      display_offset (int32_t,  uint8_t);
+void      display_offset (uint8_t,  uint8_t);
 void      display_usage  (int8_t *);
-uint32_t  get_word       (Word *,   int32_t, uint8_t);
+uint32_t  wtoi           (Word *,   int32_t, uint8_t);
 uint8_t  *get_str_word   (Word *,   int32_t);
+void      get_word       (FILE *, Word *);
+Word     *new_word       (uint8_t);
 void      rev_word       (Word *,   Word *,  uint8_t);
 
 int32_t  main (int argc, char **argv)
@@ -88,7 +92,10 @@ int32_t  main (int argc, char **argv)
     //
     FILE     *fptr                 = NULL; // input FILE pointer
     FILE     *iptr                 = NULL; // input FILE pointer
-    int8_t   *token                = NULL;
+	FILE     *verbose              = NULL; // verbosity FILE pointer
+	FILE     *color                = NULL; // color FILE pointer
+	FILE     *fancy                = NULL; // fancy (content rendering) FILE pointer
+    int8_t   *byte                 = NULL;
     uint8_t   headerflag           = 0;
     uint8_t   headertype           = 0;
     uint8_t   dataflag             = 0;
@@ -116,8 +123,6 @@ int32_t  main (int argc, char **argv)
     int32_t   index                = 0;
     int32_t   wordpos              = 0;
     int32_t   opt                  = 0;
-    int32_t   wordsize             = 4;        // Vircon32 CPU word size (in bytes)
-    uint8_t   linewidth            = wordsize; // how many words per line
     int32_t   this_option_optind   = optind ? optind : 1;
     int32_t   option_index         = 0;
     Word     *line                 = NULL;     // array for line input
@@ -131,6 +136,8 @@ int32_t  main (int argc, char **argv)
     incomplete                     = -1;
     byteoffset                     = 0;
     wordoffset                     = 0;
+    wordsize                       = 4;        // Vircon32 CPU word size (in bytes)
+    linewidth                      = wordsize; // how many words per line
 
     ////////////////////////////////////////////////////////////////////////////////////
     //
@@ -178,6 +185,10 @@ int32_t  main (int argc, char **argv)
 
             case 'c':
                 fancyflag          = FANCY_COLORS;
+				if (color         == NULL)
+				{
+					color          = stdout;
+				}
                 break;
 
             case 'd':
@@ -187,6 +198,15 @@ int32_t  main (int argc, char **argv)
 
             case 'f':
                 fancyflag          = FANCY_ALWAYS;
+				if (color         == NULL)
+				{
+					color          = stdout;
+				}
+
+				if (fancy         == NULL)
+				{
+					fancy          = stdout;
+				}
                 break;
 
             case 'F':
@@ -198,11 +218,11 @@ int32_t  main (int argc, char **argv)
                 break;
 
             case 'r':
-                token              = strtok (optarg, "-");
-                offset             = strtol (token, NULL, 16);
+                byte               = strtok (optarg, "-");
+                offset             = strtol (byte,   NULL, 16);
 
-                token              = strtok (NULL,   "-");
-                bound              = strtol (token, NULL, 16);
+                byte               = strtok (NULL,   "-");
+                bound              = strtol (byte,   NULL, 16);
 
                 for (index = offset; index <= bound; index++)
                 {
@@ -212,6 +232,15 @@ int32_t  main (int argc, char **argv)
 
             case 'R':
                 fancyflag          = FANCY_NEVER;
+				if (color         == NULL)
+				{
+					color          = fopen ("/dev/null", "w");
+				}
+
+				if (fancy         == NULL)
+				{
+					fancy          = fopen ("/dev/null", "w");
+				}
                 break;
 
             case 's':
@@ -237,7 +266,7 @@ int32_t  main (int argc, char **argv)
                 break;
 
             case 'w':
-                wordsize           = atoi (optarg);
+                wordsize           = (uint8_t) atoi (optarg);
                 if (wordsize      <  1)
                 {
                     fprintf (stderr, "[error] invalid wordsize (%u)!\n", wordsize);
@@ -246,7 +275,7 @@ int32_t  main (int argc, char **argv)
                 break;
 
             case 'W':
-                linewidth          = atoi (optarg);
+                linewidth          = (uint8_t) atoi (optarg);
                 if (linewidth     <  1)
                 {
                     fprintf (stderr, "[error] invalid width (%u)!\n", linewidth);
@@ -283,33 +312,13 @@ int32_t  main (int argc, char **argv)
 
     ////////////////////////////////////////////////////////////////////////////////////
     //
-    // Allocate space for the line of input
+    // Allocate space for the transaction word variables
     //
-    size                                      = sizeof (Word) * linewidth;
-    line                                      = (Word *) malloc (size);
-    if (line                                 == NULL)
-    {
-        fprintf (stderr, "[error] Could not allocate space for 'line'\n");
-        exit (3);
-    }
+    line                                      = new_word (linewidth);
+    line2                                     = new_word (linewidth);
+    immediate                                 = new_word (wordsize);
 
-    ////////////////////////////////////////////////////////////////////////////////////
-    //
-    // Allocate space for each word in the line
-    //
-    for (index = 0; index < linewidth; index++)
-    {
-        size                                  = sizeof (Word) * (wordsize + 1);
-        (line+index) -> data                  = (Word *) malloc (size);
-        (line+index) -> flag                  = 0;
-        if ((line+index) -> data             == NULL)
-        {
-            fprintf (stderr, "[error] Could not allocate space for 'word' in line\n");
-            exit (4);
-        }
-        (line+index) -> (data+wordsize)       = '\0';
-    }
-
+/*
     ////////////////////////////////////////////////////////////////////////////////////
     //
     // Allocate space for the line reversal array
@@ -333,7 +342,7 @@ int32_t  main (int argc, char **argv)
         fprintf (stderr, "[error] Could not allocate space for 'immediate'\n");
         exit (5);
     }
-    
+*/   
     ////////////////////////////////////////////////////////////////////////////////////
     //
     // Open specified file
@@ -375,7 +384,7 @@ int32_t  main (int argc, char **argv)
     //
     // Continue until EOF or otherwise interrupted
     //
-    offset                                    = start * wordsize;
+    wordoffset                                = start;
     pos                                       = 0;
     do
     {
@@ -383,7 +392,7 @@ int32_t  main (int argc, char **argv)
         //
         // Read from the file and build the line array
         //
-        lineaddr                              = offset;
+        lineaddr                              = wordoffset;
         for (index = 0; index < linewidth; index++)
         {
             for (wordpos = 0; wordpos < wordsize; wordpos++)
@@ -393,9 +402,9 @@ int32_t  main (int argc, char **argv)
                 // If we have  an upper bound address that is  not EOF (stop argument
                 // set), check to see if we have hit it, bail out if so
                 //
-                if (stop                       >  0)
+                if (stop                     >  0)
                 {
-                    if (wordoffset             >  stop)
+                    if (wordoffset           >  stop)
                     {
                         fseek (fptr, 0, SEEK_END);
                     }
@@ -405,7 +414,7 @@ int32_t  main (int argc, char **argv)
                 //
                 // Read a byte of data from the file
                 //
-                data                            = fgetc (fptr);
+                data                          = fgetc (fptr);
 
                 ////////////////////////////////////////////////////////////////////////
                 //
@@ -413,7 +422,7 @@ int32_t  main (int argc, char **argv)
                 //
                 if (feof (fptr))
                 {
-                    incomplete                  = index * wordpos;
+                    incomplete                = index * wordpos;
                     break;
                 }
 
@@ -421,10 +430,11 @@ int32_t  main (int argc, char **argv)
                 //
                 // Store that byte in our current word of the line array
                 //
-                (line+index) -> (data+wordpos)  = data;
-                byteoffset                      = byteoffset + 1;
+                byte                          = (line+index) -> data;
+                *(byte+wordpos)               = data;
+                byteoffset                    = byteoffset + 1;
             }
-            wordoffset                          = wordoffset + 1;
+            wordoffset                        = wordoffset + 1;
 
             ////////////////////////////////////////////////////////////////////////////
             //
@@ -525,7 +535,7 @@ int32_t  main (int argc, char **argv)
             //
             // Not EOF, assign read data value into line array
             //
-            (line+index) -> value             = data;
+            //(line+index) -> data              = data;
 
             ////////////////////////////////////////////////////////////////////////////
             //
@@ -534,7 +544,7 @@ int32_t  main (int argc, char **argv)
             tmp                               = list;
             while (tmp                       != NULL)
             {
-                if (tmp -> addr              == (offset / wordsize))
+                if (tmp -> addr              == wordoffset)
                 {
                     (line+index) -> flag      = 1;
                     lineflag                  = 1;
@@ -547,7 +557,7 @@ int32_t  main (int argc, char **argv)
             //
             // Word valid and processing complete, increment offset
             //
-            offset                            = offset + 1;
+            wordoffset                        = wordoffset + 1;
         }
 
         ////////////////////////////////////////////////////////////////////////////////
@@ -586,7 +596,7 @@ int32_t  main (int argc, char **argv)
         //
         // Display left side offset
         //
-        fprintf (stdout, "[0x%.8X]  ", (lineaddr / wordsize) | offsetmask);
+        fprintf (stdout, "[0x%.8X]  ", (lineaddr | offsetmask));
 
         ////////////////////////////////////////////////////////////////////////////////
         //
@@ -594,296 +604,266 @@ int32_t  main (int argc, char **argv)
         //
         if (lineflag                         >  0)
         {
-            if (fancyflag                    != FANCY_NEVER)
-            {
-                fprintf (stdout, "\e[m");
-            }
+			fprintf (color, "\e[m");
         }
 
         ////////////////////////////////////////////////////////////////////////////////
         //
         // Process the line array, displaying (and formatting) line contents
         //
-        for (index = 0; index < (linewidth * wordsize); index++)
+        for (index = 0; index < linewidth; index++)
         {
-            ////////////////////////////////////////////////////////////////////////////
-            //
-            // On incomplete lines, pad spaces to maintain alignment
-            //
-            if ((incomplete                  >  -1) &&
-                (index                       >= incomplete))
-            {
-                fprintf (stdout, "   ", incomplete);
-                if (((index + 1) % wordsize) == 0)
-                {
-                    fprintf (stdout, " ");
-                }
-                offset                        = offset + 1;
-            }
+			for (count = 0; count < wordsize; count++)
+			{
+				////////////////////////////////////////////////////////////////////////
+				//
+				// On incomplete lines, pad spaces to maintain alignment
+				//
+				if ((incomplete              >  -1) &&
+					(index                   >= incomplete))
+				{
+					fprintf (stdout, "   ", incomplete);
+					if (count                == 0)
+					{
+						fprintf (stdout, " ");
+					}
+					wordoffset                = wordoffset + 1;
+				}
 
-            ////////////////////////////////////////////////////////////////////////////
-            //
-            // Normal line content processing
-            //
-            else
-            {
-                ////////////////////////////////////////////////////////////////////////
-                //
-                // Check for address highlight match: enable if confirmed
-                //
-                if ((line+index) -> flag     == 1)
-                {
-                    if (flag                 == 0)
-                    {
-                        if (fancyflag        != FANCY_NEVER)
-                        {
-                            fprintf (stdout, "\e[1;32m");
-                        }
-                        flag                  = 1;
-                    }
-                }
+				////////////////////////////////////////////////////////////////////////
+				//
+				// Normal line content processing
+				//
+				else
+				{
+					////////////////////////////////////////////////////////////////////
+					//
+					// Check for address highlight match: enable if confirmed
+					//
+					if ((line+index) -> flag == 1)
+					{
+						if (flag             == 0)
+						{
+							fprintf (color, "\e[1;32m");
+							flag              = 1;
+						}
+					}
 
-                ////////////////////////////////////////////////////////////////////////
-                //
-                // Check for V32 HEADER highlighting
-                //
-                else if (lineflag            >  1)
-                {
-                    if (flag                 == 0)
-                    {
-                        if (fancyflag        != FANCY_NEVER)
-                        {
-                            fprintf (stdout, "\e[1;31m");
-                        }
-                        flag                  = 1;
-                    }
-                }
+					////////////////////////////////////////////////////////////////////
+					//
+					// Check for V32 HEADER highlighting
+					//
+					else if (lineflag        >  1)
+					{
+						if (flag             == 0)
+						{
+							fprintf (color, "\e[1;31m");
+							flag              = 1;
+						}
+					}
 
-                ////////////////////////////////////////////////////////////////////////
-                //
-                // Check for V32 HEADER data highlighting
-                //
-                else if (dataflag            >  0)
-                {
-                    switch (headertype)
-                    {
-                        case V32_CART:
-                        case V32_BIOS:
-                            if (flag         == 0)
-                            {
-                                if (fancyflag != FANCY_NEVER)
-                                {
-                                    fprintf (stdout, "\e[1;35m");
-                                }
-                                flag          = 1;
-                            }
-                            break;
+					////////////////////////////////////////////////////////////////////
+					//
+					// Check for V32 HEADER data highlighting
+					//
+					else if (dataflag        >  0)
+					{
+						switch (headertype)
+						{
+							case V32_CART:
+							case V32_BIOS:
+								if (flag     == 0)
+								{
+									fprintf (color, "\e[1;35m");
+									flag      = 1;
+								}
+								break;
 
-                        case V32_VBIN:
-                            if (flag         == 0)
-                            {
-                                if (fancyflag != FANCY_NEVER)
-                                {
-                                    fprintf (stdout, "\e[1;34m");
-                                }
-                                flag          = 1;
-                            }
-                            break;
+							case V32_VBIN:
+								if (flag     == 0)
+								{
+									fprintf (color, "\e[1;34m");
+									flag      = 1;
+								}
+								break;
+							
+							case V32_VSND:
+								if (flag     == 0)
+								{
+									fprintf (color, "\e[1;33m");
+									flag      = 1;
+								}
+								break;
+
+							case V32_VTEX:
+								if (flag     == 0)
+								{
+									fprintf (color, "\e[1;36m");
+									flag      = 1;
+								}
+								break;
+
+							case V32_MEMC:
+								break;    
+						}
+					}
+
+					////////////////////////////////////////////////////////////////////
+					//
+					// Otherwise, no special formatting
+					//
+					else
+					{
+						flag                  = 0;
+					}
+
+					////////////////////////////////////////////////////////////////////
+					//
+					// Collect the current word bytes into one integer
+					//
+					if (count                == NEW_WORD)
+					{
+						word                  = wtoi (line, index, WORD_LITTLE);
+						size                  = wordsize * linewidth;
+						rev_word (line, line2, size);
+
+						if (headertype       == V32_VBIN)
+						{
+							immflag           = (word & 0x02000000) >> 25;
+							if (immflag      == 1)
+							{
+								fseek (iptr, ftell (fptr), SEEK_SET);
+								get_word (fptr, immediate);
+								immval        = wtoi (immediate, 0, WORD_LITTLE);
+							}
+							else
+							{
+								immflag       = 0;
+								immval        = 0;
+							}
+						}
+					}
+
+					////////////////////////////////////////////////////////////////////
+					//
+					// Display the byte of data
+					//
+					if (lineflag             >  1)
+					{
+						byte                  = (line+index) -> data;
+						if (fancyflag        != FANCY_NEVER)
+						{
+							fprintf (fancy,  "%2c ",   *(byte+count));
+						}
+						else
+						{
+							fprintf (stdout, "%2hhX ", *(byte+count));
+						}
+					}
+
+					////////////////////////////////////////////////////////////////////
+					//
+					// Display the header data contents
+					//
+					else if ((dataflag       >  0) &&
+							 (wordflag       != WORD_HOLD))
+					{
+						word                  = wtoi (line, index, WORD_LITTLE);
+						switch (headertype)
+						{
+							case V32_CART:
+							case V32_BIOS:
+								switch (dataflag)
+								{
+									case 30: // Vircon32 version
+										fprintf (fancy, "v32 ver:%3u ", word);
+										break;
+
+									case 29: // Vircon32 revision
+										fprintf (fancy, "v32 rev:%3u ", word);
+										break;
+
+									case 12: // ROM version
+										fprintf (fancy, "ROM ver:%3u ", word);
+										break;
+
+									case 11: // ROM revision
+										fprintf (fancy, "ROM rev:%3u ", word);
+										break;
+
+									case 10: // number of textures
+										fprintf (fancy, "# VTEX: %3u ", word);
+										break;
+
+									case 9: // number of sounds
+										fprintf (fancy, "# VSND: %3u ", word);
+										break;
+
+									case 8: // Program ROM offset
+										fprintf (fancy, "ROM: 0x%.4X ", (word / wordsize));
+										break;
+
+									case 7: // Program ROM size
+										fprintf (fancy, "size:%.6X ",    word);
+										break;
+
+									case 6: // Video ROM offset
+										fprintf (fancy, "VO:%.8X ",     (word / wordsize));
+										break;
+
+									case 5: // Video ROM size
+										fprintf (fancy, "VS:%.8X ",     (word / wordsize));
+										break;
+
+									case 4: // Audio ROM offset
+										fprintf (fancy, "AO:%.8X ",     (word / wordsize));
+										break;
+
+									case 3: // Audio ROM size
+										fprintf (fancy, "AS:%.8X ",     (word / wordsize));
+										break;
+
+									case 2: // Reserved
+									case 1: // Reserved
+										fprintf (fancy, "%-11s ",       "[reserved]");
+										break;
+
+									default: // CART name
+										byte  = (line+index) -> data;
+										fprintf (fancy, "%-11s ",  byte);
+										break;
+								}
+								break;
+
+							case V32_VBIN:
+								fprintf (stdout, "size: %.5X ", word);
+								break;
                         
-                        case V32_VSND:
-                            if (flag         == 0)
-                            {
-                                if (fancyflag != FANCY_NEVER)
-                                {
-                                    fprintf (stdout, "\e[1;33m");
-                                }
-                                flag          = 1;
-                            }
-                            break;
+							case V32_VSND:
+								switch (dataflag)
+								{
+									case 1: // height
+										fprintf (stdout, "# %-9u ",    word);
+										break;
+								}
+								break;
 
-                        case V32_VTEX:
-                            if (flag         == 0)
-                            {
-                                if (fancyflag != FANCY_NEVER)
-                                {
-                                    fprintf (stdout, "\e[1;36m");
-                                }
-                                flag          = 1;
-                            }
-                            break;
+							case V32_VTEX:
+								switch (dataflag)
+								{
+									case 2: // width
+										fprintf (stdout, "W: %6u x ",  word);
+										break;
 
-                        case V32_MEMC:
-                            break;    
-                    }
-                }
+									case 1: // height
+										fprintf (stdout, "H: %-8u ",   word);
+										break;
+								}
+								break;
 
-                ////////////////////////////////////////////////////////////////////////
-                //
-                // Otherwise, no special formatting
-                //
-                else
-                {
-                    flag                      = 0;
-                }
-
-                ////////////////////////////////////////////////////////////////////////
-                //
-                // Collect the current word bytes into one integer
-                //
-                if (wordflag                 == WORD_NEW)
-                {
-                    word                      = get_word (line, index, WORD_LITTLE);
-                    size                      = wordsize * linewidth;
-                    rev_word (line, line2, size);
-
-                    if (headertype           == V32_VBIN)
-                    {
-                        immflag               = (word & 0x02000000) >> 25;
-                        if (immflag          == 1)
-                        {
-                            fseek (iptr, ftell (fptr), SEEK_SET);
-                            for (count = 0; count < wordsize; count++)
-                            {
-                                imm           = (immediate+count);
-                                data          = fgetc(iptr);
-                                imm -> value  = data;
-                            }
-                            immval            = get_word (immediate, 0, WORD_LITTLE);
-                        }
-                        else
-                        {
-                            immflag           = 0;
-                            immval            = 0;
-                        }
-                    }
-
-                    wordflag                  = WORD_LOCK;
-                }
-
-                ////////////////////////////////////////////////////////////////////////
-                //
-                // Display the byte of data
-                //
-                if (lineflag                 >  1)
-                {
-                    if (fancyflag            != FANCY_NEVER)
-                    {
-                        fprintf (stdout, "%2c ",   (line+index) -> value);
-                    }
-                    else
-                    {
-                        fprintf (stdout, "%2hhX ", (line+index) -> value);
-                    }
-                }
-
-                ////////////////////////////////////////////////////////////////////////
-                //
-                // Display the header data contents
-                //
-                else if ((dataflag           >  0) &&
-                         (wordflag           != WORD_HOLD) &&
-                         (fancyflag          != FANCY_NEVER))
-                {
-                    wordflag                  = WORD_HOLD;
-                    switch (headertype)
-                    {
-                        case V32_CART:
-                        case V32_BIOS:
-                            word              = get_word (line, index, WORD_LITTLE);
-                            switch (dataflag)
-                            {
-                                case 30: // Vircon32 version
-                                    fprintf (stdout, "v32 ver:%3u ", word);
-                                    break;
-
-                                case 29: // Vircon32 revision
-                                    fprintf (stdout, "v32 rev:%3u ", word);
-                                    break;
-
-                                case 12: // ROM version
-                                    fprintf (stdout, "ROM ver:%3u ", word);
-                                    break;
-
-                                case 11: // ROM revision
-                                    fprintf (stdout, "ROM rev:%3u ", word);
-                                    break;
-
-                                case 10: // number of textures
-                                    fprintf (stdout, "# VTEX: %3u ", word);
-                                    break;
-
-                                case 9: // number of sounds
-                                    fprintf (stdout, "# VSND: %3u ", word);
-                                    break;
-
-                                case 8: // Program ROM offset
-                                    fprintf (stdout, "ROM: 0x%.4X ", (word / wordsize));
-                                    break;
-
-                                case 7: // Program ROM size
-                                    fprintf (stdout, "size:%.6X ",    word);
-                                    break;
-
-                                case 6: // Video ROM offset
-                                    fprintf (stdout, "VO:%.8X ",     (word / wordsize));
-                                    break;
-
-                                case 5: // Video ROM size
-                                    fprintf (stdout, "VS:%.8X ",     (word / wordsize));
-                                    break;
-
-                                case 4: // Audio ROM offset
-                                    fprintf (stdout, "AO:%.8X ",     (word / wordsize));
-                                    break;
-
-                                case 3: // Audio ROM size
-                                    fprintf (stdout, "AS:%.8X ",     (word / wordsize));
-                                    break;
-
-                                case 2: // Reserved
-                                case 1: // Reserved
-                                    fprintf (stdout, "%-11s ",       "[reserved]");
-                                    break;
-
-                                default: // CART name
-                                    token     = get_str_word (line, index);
-                                    fprintf (stdout, "%-11s ",  token);
-                                    break;
-                            }
-                            break;
-
-                        case V32_VBIN:
-                            word              = get_word (line, index, WORD_LITTLE);
-                            fprintf (stdout, "size: %.5X ", word);
-                            break;
-                        
-                        case V32_VSND:
-                            word              = get_word (line, index, WORD_LITTLE);
-                            switch (dataflag)
-                            {
-                                case 1: // height
-                                    fprintf (stdout, "# %-9u ",    word);
-                                    break;
-                            }
-                            break;
-
-                        case V32_VTEX:
-                            word              = get_word (line, index, WORD_LITTLE);
-                            switch (dataflag)
-                            {
-                                case 2: // width
-                                    fprintf (stdout, "W: %6u x ",    word);
-                                    break;
-
-                                case 1: // height
-                                    fprintf (stdout, "H: %-8u ",    word);
-                                    break;
-                            }
-                            break;
-
-                        case V32_MEMC:
-                            break;    
-                    }
+							case V32_MEMC:
+								break;    
+						}
 
                     ////////////////////////////////////////////////////////////////////
                     //
@@ -900,76 +880,85 @@ int32_t  main (int argc, char **argv)
                 //
                 else
                 {
-                    if (wordflag             != WORD_HOLD)
-                    {
-                        switch (headertype)
-                        {
-                            case V32_VBIN:
-                                fprintf (stdout, "%.2hhX ", (line2+index) -> value); 
-                                break;
+					switch (headertype)
+					{
+						case V32_VBIN:
+							byte           = (line2+index) -> data;
+							for (count = 0; count < wordsize; count++)
+							{
+								fprintf (stdout, "%.2hhX ", *(byte+count));
+							}
+							break;
 
-                            case V32_VSND:
-                                if (fancyflag != FANCY_NEVER)
-                                {
-                                    switch (index % 4)
-                                    {
-                                        case 0:    // RED (right channel)
-                                        case 1:
-                                            fprintf (stdout, "\e[1;31m");
-                                            break;
+						case V32_VSND:
+							imm            = line;
+							if (fancyflag != FANCY_NEVER)
+							{
+								imm        = line2;
+							}
 
-                                        case 2:    // CYAN (left channel)
-                                        case 3:
-                                            fprintf (stdout, "\e[1;36m");
-                                            break;
-                                    }
+							byte           = (imm+index) -> data;
+							for (count = 0; count < wordsize; count++)
+							{
+								switch (count)
+								{
+									case 0:    // RED (right channel)
+									case 1:
+										fprintf (color, "\e[1;31m");
+										break;
 
-                                    fprintf (stdout, "%.2hhX ", (line2+index) -> value);
-                                    fprintf (stdout, "\e[m");
-                                }
-                                else
-                                {
-                                    fprintf (stdout, "%.2hhX ", (line+index) -> value);
-                                }
-                                break;
+									case 2:    // CYAN (left channel)
+									case 3:
+										fprintf (color, "\e[1;36m");
+										break;
+								}
+								fprintf (stdout, "%.2hhX ", *(byte+count));
+							}
+							fprintf (color, "\e[m");
+							break;
 
-                            case V32_VTEX:
-                                if (fancyflag != FANCY_NEVER)
-                                {
-                                    switch (index % 4)
-                                    {
-                                        case 0:    // RED
-                                            fprintf (stdout, "\e[1;31m");
-                                            break;
+						case V32_VTEX:
+							imm            = line;
+							if (fancyflag != FANCY_NEVER)
+							{
+								imm        = line2;
+							}
 
-                                        case 1:    // GREEN
-                                            fprintf (stdout, "\e[1;32m");
-                                            break;
+							byte           = (imm+index) -> data;
+							for (count = 0; count < wordsize; count++)
+							{
+								switch (count)
+								{
+									case 0:    // RED
+										fprintf (color, "\e[1;31m");
+										break;
 
-                                        case 2:    // BLUE
-                                            fprintf (stdout, "\e[1;34m");
-                                            break;
+									case 1:    // GREEN
+										fprintf (color, "\e[1;32m");
+										break;
 
-                                        case 3:    // ALPHA
-                                            fprintf (stdout, "\e[1;37m");
-                                            break;
-                                    }
+									case 2:    // BLUE
+										fprintf (color, "\e[1;34m");
+										break;
 
-                                    fprintf (stdout, "%.2hhX ", (line2+index) -> value);
-                                    fprintf (stdout, "\e[m");
-                                }
-                                else
-                                {
-                                    fprintf (stdout, "%.2hhX ", (line+index) -> value);
-                                }
-                                break;
+									case 3:    // ALPHA
+										fprintf (color, "\e[1;37m");
+										break;
+								}
+								fprintf (stdout, "%.2hhX ", *(byte+count));
+							}
+							fprintf (color, "\e[m");
+							break;
 
-                            default:
-                                fprintf (stdout, "%.2hhX ", (line+index) -> value);
-                                break;
-                        }
-                    }
-                }
+						default:
+							byte       = (line+index) -> data;
+							for (count = 0; count < wordsize; count++)
+							{
+								fprintf (stdout, "%.2hhX ", *(byte+count));
+							}
+							break;
+					}
+				}
 
                 ////////////////////////////////////////////////////////////////////////
                 //
@@ -981,19 +970,14 @@ int32_t  main (int argc, char **argv)
                 //
                 // If we are on a wordsize boundary, display an extra whitespace
                 //
-                if (((index + 1) % wordsize) == 0)
+				if (count                    == 0)
                 {
                     fprintf (stdout, " ");
-                    if ((flag                == 1) ||
-                       (wordflag             == WORD_HOLD))
+                    if (flag                 == 1)
                     {
-                        if (fancyflag        != FANCY_NEVER)
-                        {
-                            fprintf (stdout, "\e[m");
-                        }
+						fprintf (fancy, "\e[m");
                         flag                  = 0;
                     }
-                    wordflag                  = WORD_NEW;
                 }
 
                 ////////////////////////////////////////////////////////////////////////
@@ -1015,15 +999,12 @@ int32_t  main (int argc, char **argv)
                 {
                     if (flag                 == 1)
                     {
-                        if (fancyflag        != FANCY_NEVER)
-                        {
-                            fprintf (stdout, "\e[m");
-                        }
+						fprintf (color, "\e[m");
                         flag                  = 0;
                     }
                 }
             }
-        }
+		}
 
         ////////////////////////////////////////////////////////////////////////////////
         //
@@ -1031,10 +1012,7 @@ int32_t  main (int argc, char **argv)
         //
         if (flag                             == 1)
         {
-            if (fancyflag                    != FANCY_NEVER)
-            {
-                fprintf (stdout, "\e[m");
-            }
+			fprintf (color, "\e[m");
             flag                              = 0;
         }
 
@@ -1050,17 +1028,14 @@ int32_t  main (int argc, char **argv)
             //
             if (lineflag                     >  0)
             {
-                if (fancyflag                != FANCY_NEVER)
-                {
-                    fprintf (stdout, "\e[1;33m");
-                }
+				fprintf (color, "\e[1;33m");
             }
 
             ////////////////////////////////////////////////////////////////////////////
             //
             // Display right side offset
             //
-            fprintf (stdout, "[0x%.8X]\n", ((offset - 1) / wordsize) | offsetmask);
+            fprintf (stdout, "[0x%.8X]\n", (wordoffset | offsetmask));
         }
 
         ////////////////////////////////////////////////////////////////////////////////
@@ -1070,7 +1045,7 @@ int32_t  main (int argc, char **argv)
         else
         {
             if ((headertype                      == V32_VBIN) &&
-                ((offset / wordsize)             >  0x23))
+                (wordoffset                      >  0x23))
             {
                 if (skipflag                     == 0)
                 {
@@ -1099,10 +1074,7 @@ int32_t  main (int argc, char **argv)
         //
         if (lineflag                         >  0)
         {
-            if (fancyflag                    != FANCY_NEVER)
-            {
-                fprintf (stdout, "\e[m");
-            }
+			fprintf (color, "\e[m");
 
             if (lineflag                     == 1)
             {
@@ -1114,7 +1086,11 @@ int32_t  main (int argc, char **argv)
         //
         // Clear current line array entry
         //
-        (line+index) -> value                 = 0;
+		byte                                  = (line+index) -> data;
+		for (count = 0; count < wordsize; count++)
+		{
+			*(byte+count)                     = 0;
+		}
 
     } while (!feof (fptr));
 
@@ -1133,6 +1109,7 @@ int32_t  main (int argc, char **argv)
     }
 
     free (line);
+    free (line2);
     free (immediate);
 
     fclose (fptr);
@@ -1140,7 +1117,7 @@ int32_t  main (int argc, char **argv)
     return (0);
 }
 
-void display_offset (int32_t  wordsize, uint8_t  linewidth)
+void display_offset (uint8_t  wordsize, uint8_t  linewidth)
 {
     ////////////////////////////////////////////////////////////////////////////////////
     //
@@ -1291,9 +1268,9 @@ void  add_node (uint32_t address)
 
 ////////////////////////////////////////////////////////////////////////////////////////
 //
-// get_word(): assemble individual bytes in a word into an integer
+// wtoi(): assemble individual bytes in a word into an integer
 //
-uint32_t  get_word (Word *line, int32_t  offset, uint8_t flag)
+uint32_t  wtoi (Word *line, int32_t  offset, uint8_t flag)
 {
     int32_t   index  = 0;
     uint32_t  data   = 0;
@@ -1718,4 +1695,76 @@ void  rev_word (Word *line, Word *line2, uint8_t  size)
         (line2+offset) -> flag   = (line+index) -> flag;
         offset                   = offset - 1;
     }
+}
+
+void  get_word (FILE *fptr, Word *word)
+{
+	int8_t  *byte       = NULL;
+    int32_t  data       = 0;
+    int32_t  index      = 0;
+
+	byte                = word -> data;
+
+    for (index = 0; index < 4; index++)
+    {
+        data            = fgetc (fptr);
+        if (feof (fptr))
+        {
+            incomplete  = index;
+            break;
+        }
+
+        *(byte+index)   = data;
+        byteoffset      = byteoffset + 1;
+    }
+    *(byte+wordsize)    = '\0';
+    wordoffset          = wordoffset + 1;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////
+//
+// new_word(): allocate and initialize a new word
+//
+Word  *new_word (uint8_t  length)
+{
+    ////////////////////////////////////////////////////////////////////////////////////
+    //
+    // Declare and initialize local variables
+    //
+    int8_t  *byte   = NULL;
+    int32_t  index  = 0;
+    size_t   size   = 0;
+    Word    *word   = NULL;
+
+    ////////////////////////////////////////////////////////////////////////////////////
+    //
+    // Allocate space for the line of input
+    //
+    size                                      = sizeof (Word) * length;
+    word                                      = (Word *) malloc (size);
+    if (word                                 == NULL)
+    {
+        fprintf (stderr, "[error] Could not allocate space for word\n");
+        exit (3);
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////////
+    //
+    // Allocate space for each word in the line
+    //
+    for (index = 0; index < linewidth; index++)
+    {
+        size                                  = sizeof (int8_t) * (wordsize + 1);
+        (line+index) -> data                  = (int8_t *) malloc (size);
+        (line+index) -> flag                  = 0;
+        if ((line+index) -> data             == NULL)
+        {
+            fprintf (stderr, "[error] Could not allocate space for data in word\n");
+            exit (4);
+        }
+        byte                                 = (line+index) -> data;
+        *(byte+wordsize)                     = '\0';
+    }
+
+    return (word);
 }
