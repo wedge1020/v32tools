@@ -67,5 +67,21 @@ common  attributes for  each  section.  Much as  **v32cat**  can do,  but
 designed to be in a more top-down readable and concise format.
 
 The idea is that  you can get a quick overview  of a particular cartridge
-with **v32ls**,  then take that  information (offsets) and apply  them to
-your pursuits with **v32cat**.
+with **v32ls**, then take that information (the `offsets`) and apply them
+to your pursuits with **v32cat**.
+
+**v32ls** should  also be more  performant than **v32cat**  in traversing
+the file, due to not needing to encounter each and every byte/word inside
+each section. Through the use of  `fseek(3)`, and being able to calculate
+the total  size of the  current section,  seeks are performed  to quickly
+jump from section to section.
+
+### default
+
+By default, **v32ls** will locate and display (in order from the start of
+the file): each V32 header, and its starting offset.
+
+### verbosity
+
+With the  inclusion of the  `-v` or `--verbose` argument,  additional V32
+header information will be displayed.
