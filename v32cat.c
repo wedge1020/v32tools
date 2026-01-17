@@ -39,10 +39,12 @@
 #define  WORD_LITTLE    0
 #define  WORD_BIG       1
 
-typedef struct byte Byte;
-struct byte
+#define  MATCH          1
+
+typedef struct word Word;
+struct word
 {
-    int8_t   value;
+    int8_t  *data;
     uint8_t  flag;
 };
 
@@ -61,7 +63,10 @@ struct string_data
 };
 typedef struct string_data String_data;
 
-Node *list;
+Node     *list;
+int32_t   incomplete;
+uint32_t  byteoffset;
+uint32_t  wordoffset;
  
 ////////////////////////////////////////////////////////////////////////////////////////
 //
@@ -71,9 +76,9 @@ void      add_node       (uint32_t);
 void      decode         (uint32_t, uint32_t);
 void      display_offset (int32_t,  uint8_t);
 void      display_usage  (int8_t *);
-uint32_t  get_word       (Byte *,   int32_t, uint8_t);
-uint8_t  *get_str_word   (Byte *,   int32_t);
-void      rev_word       (Byte *,   Byte *,  uint8_t);
+uint32_t  get_word       (Word *,   int32_t, uint8_t);
+uint8_t  *get_str_word   (Word *,   int32_t);
+void      rev_word       (Word *,   Word *,  uint8_t);
 
 int32_t  main (int argc, char **argv)
 {
@@ -99,9 +104,9 @@ int32_t  main (int argc, char **argv)
     uint8_t   size                 = 0;
     uint8_t   pos                  = 0;
     int32_t   data                 = 0;        // variable holding input
+    int32_t   headerchk            = 0;        // variable holding input
     uint32_t  word                 = 0;        // variable holding condensed word
     uint32_t  immval               = 0;        // variable holding condensed word
-    int32_t   incomplete           = -1;
     uint32_t  lineaddr             = 0;        // start of line address
     uint32_t  offset               = 0;        // count of input bytes
     uint32_t  offsetmask           = 0;        // mask to apply to current offset
@@ -109,19 +114,23 @@ int32_t  main (int argc, char **argv)
     uint32_t  stop                 = 0;        // ending address
     uint32_t  bound                = 0;
     int32_t   index                = 0;
+    int32_t   wordpos              = 0;
     int32_t   opt                  = 0;
     int32_t   wordsize             = 4;        // Vircon32 CPU word size (in bytes)
     uint8_t   linewidth            = wordsize; // how many words per line
     int32_t   this_option_optind   = optind ? optind : 1;
     int32_t   option_index         = 0;
-    Byte     *line                 = NULL;     // array for line input
-    Byte     *line2                = NULL;     // array for line reversal
-    Byte     *immediate            = NULL;     // array for immediate data
-    Byte     *imm                  = NULL;              
+    Word     *line                 = NULL;     // array for line input
+    Word     *line2                = NULL;     // array for line reversal
+    Word     *immediate            = NULL;     // array for immediate data
+    Word     *imm                  = NULL;              
     Node     *tmp                  = NULL;
     int8_t    HEADER[]             = { 'V', '3', '2', '-' };
 
     list                           = NULL;
+    incomplete                     = -1;
+    byteoffset                     = 0;
+    wordoffset                     = 0;
 
     ////////////////////////////////////////////////////////////////////////////////////
     //
@@ -276,8 +285,8 @@ int32_t  main (int argc, char **argv)
     //
     // Allocate space for the line of input
     //
-    size                                      = sizeof (Byte) * (wordsize * linewidth);
-    line                                      = (Byte *) malloc (size);
+    size                                      = sizeof (Word) * linewidth;
+    line                                      = (Word *) malloc (size);
     if (line                                 == NULL)
     {
         fprintf (stderr, "[error] Could not allocate space for 'line'\n");
@@ -286,10 +295,27 @@ int32_t  main (int argc, char **argv)
 
     ////////////////////////////////////////////////////////////////////////////////////
     //
+    // Allocate space for each word in the line
+    //
+    for (index = 0; index < linewidth; index++)
+    {
+        size                                  = sizeof (Word) * (wordsize + 1);
+        (line+index) -> data                  = (Word *) malloc (size);
+        (line+index) -> flag                  = 0;
+        if ((line+index) -> data             == NULL)
+        {
+            fprintf (stderr, "[error] Could not allocate space for 'word' in line\n");
+            exit (4);
+        }
+        (line+index) -> (data+wordsize)       = '\0';
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////////
+    //
     // Allocate space for the line reversal array
     //
-    size                                      = sizeof (Byte) * (wordsize * linewidth);
-    line2                                     = (Byte *) malloc (size);
+    size                                      = sizeof (Word) * (wordsize * linewidth);
+    line2                                     = (Word *) malloc (size);
     if (line2                                == NULL)
     {
         fprintf (stderr, "[error] Could not allocate space for 'line2'\n");
@@ -300,8 +326,8 @@ int32_t  main (int argc, char **argv)
     //
     // Allocate space for the immediate value
     //
-    size                                      = sizeof (Byte) * (wordsize * linewidth);
-    immediate                                 = (Byte *) malloc (size);
+    size                                      = sizeof (Word) * (wordsize * linewidth);
+    immediate                                 = (Word *) malloc (size);
     if (immediate                            == NULL)
     {
         fprintf (stderr, "[error] Could not allocate space for 'immediate'\n");
@@ -358,42 +384,63 @@ int32_t  main (int argc, char **argv)
         // Read from the file and build the line array
         //
         lineaddr                              = offset;
-        for (index = 0; index < linewidth * wordsize; index++)
+        for (index = 0; index < linewidth; index++)
         {
-            ////////////////////////////////////////////////////////////////////////////
-            //
-            // If we have an upper bound address that is not EOF (stop argument set),
-            // check to see if we have hit it, bail out if so
-            //
-            if (stop                         >  0)
-            {
-                if ((offset / wordsize)      >  stop)
-                {
-                    fseek (fptr, 0, SEEK_END);
-                }
-            }
-
-            ////////////////////////////////////////////////////////////////////////////
-            //
-            // Read a byte of data from the file
-            //
-            data                              = fgetc (fptr);
-
-            ////////////////////////////////////////////////////////////////////////////
-            //
-            // Check for V32 HEADER
-            //
-            if (headerflag                   == 0)
+            for (wordpos = 0; wordpos < wordsize; wordpos++)
             {
                 ////////////////////////////////////////////////////////////////////////
                 //
-                // Check for potential match, which will be the result of several
-                // successive hits ('V', '3', '2', '-')
+                // If we have  an upper bound address that is  not EOF (stop argument
+                // set), check to see if we have hit it, bail out if so
                 //
-                if (data                     == HEADER[pos])
+                if (stop                       >  0)
                 {
-                    count                     = count + 1;
-                    pos                       = pos   + 1;
+                    if (wordoffset             >  stop)
+                    {
+                        fseek (fptr, 0, SEEK_END);
+                    }
+                }
+
+                ////////////////////////////////////////////////////////////////////////
+                //
+                // Read a byte of data from the file
+                //
+                data                            = fgetc (fptr);
+
+                ////////////////////////////////////////////////////////////////////////
+                //
+                // Check for EOF condition
+                //
+                if (feof (fptr))
+                {
+                    incomplete                  = index * wordpos;
+                    break;
+                }
+
+                ////////////////////////////////////////////////////////////////////////
+                //
+                // Store that byte in our current word of the line array
+                //
+                (line+index) -> (data+wordpos)  = data;
+                byteoffset                      = byteoffset + 1;
+            }
+            wordoffset                          = wordoffset + 1;
+
+            ////////////////////////////////////////////////////////////////////////////
+            //
+            // If we aren't already actively servicing a header, check for V32 HEADER
+            //
+            if (headerflag               == 0)
+            {
+                ////////////////////////////////////////////////////////////////////////
+                //
+                // Check to see if we have encountered a V32 header
+                //
+                headerchk                 = strncmp ((line+index) -> data, "V32-", 4);
+                if (headerchk            == MATCH)
+                {
+                    count                 = count + 1;
+                    pos                   = pos   + 1;
                 
                     ////////////////////////////////////////////////////////////////////
                     //
@@ -498,7 +545,7 @@ int32_t  main (int argc, char **argv)
 
             ////////////////////////////////////////////////////////////////////////////
             //
-            // Byte valid and processing complete, increment offset
+            // Word valid and processing complete, increment offset
             //
             offset                            = offset + 1;
         }
@@ -1246,7 +1293,7 @@ void  add_node (uint32_t address)
 //
 // get_word(): assemble individual bytes in a word into an integer
 //
-uint32_t  get_word (Byte *line, int32_t  offset, uint8_t flag)
+uint32_t  get_word (Word *line, int32_t  offset, uint8_t flag)
 {
     int32_t   index  = 0;
     uint32_t  data   = 0;
@@ -1276,7 +1323,7 @@ uint32_t  get_word (Byte *line, int32_t  offset, uint8_t flag)
 //
 // get_str_word(): assemble individual bytes in a word into a string
 //
-uint8_t  *get_str_word (Byte *line, int32_t  offset)
+uint8_t  *get_str_word (Word *line, int32_t  offset)
 {
     int32_t   index        = 0;
     uint32_t  data         = 0;
@@ -1660,7 +1707,7 @@ void  decode (uint32_t word, uint32_t immediate_value)
     fprintf (stdout, "\n");
 }
 
-void  rev_word (Byte *line, Byte *line2, uint8_t  size)
+void  rev_word (Word *line, Word *line2, uint8_t  size)
 {
     int32_t  index               = 0;
     int32_t  offset              = size - 1;
