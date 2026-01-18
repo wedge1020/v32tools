@@ -18,6 +18,8 @@
 #include <string.h>
 #include <unistd.h>
 
+#define  BUFFER         1024
+
 #define  FANCY_NEVER    0
 #define  FANCY_DEFAULT  1
 #define  FANCY_ALWAYS   2
@@ -47,6 +49,8 @@ struct word
 {
     int8_t  *data;
     uint8_t  flag;
+    Word    *prev;
+    Word    *next;
 };
 
 typedef struct node Node;
@@ -111,7 +115,7 @@ int32_t  main (int argc, char **argv)
     uint8_t   count                = 0;
     uint8_t   immflag              = 0;
     uint8_t   pos                  = 0;
-	int8_t    lineposition         = 0;
+    int8_t    lineposition         = 0;
     int32_t   data                 = 0;           // variable holding input
     int32_t   headerchk            = 0;           // variable holding input
     uint32_t  wordval              = 0;           // variable holding condensed word
@@ -134,7 +138,6 @@ int32_t  main (int argc, char **argv)
     Word     *immediate            = NULL;        // array for immediate data
     Word     *imm                  = NULL;              
     Node     *tmp                  = NULL;
-    int8_t   *dataline             = NULL;
 
     list                           = NULL;
     incomplete                     = -1;
@@ -359,20 +362,9 @@ int32_t  main (int argc, char **argv)
     //
     // Allocate space for the transaction word variables
     //
-    line                                      = new_word (wordsize * linewidth);
+    line                                      = new_word (BUFFER);
     beword                                    = new_word (wordsize);
     immediate                                 = new_word (wordsize);
-
-    ////////////////////////////////////////////////////////////////////////////////////
-    //
-    // Allocate space for dataline string
-    //
-    dataline             = (int8_t *) malloc (sizeof (int8_t) * 255);
-    if (dataline        == NULL)
-    {
-        fprintf (stderr, "[error] could not malloc for dataline!\n");
-        exit (1);
-    }
 
     ////////////////////////////////////////////////////////////////////////////////////
     //
@@ -416,7 +408,7 @@ int32_t  main (int argc, char **argv)
     // Read first word, adjust wordoffset
     //
     get_word (fptr, word);
-	lineposition                  = 0;
+    lineposition                  = 0;
     wordoffset                    = lowerbound;
 
     ////////////////////////////////////////////////////////////////////////////////////
@@ -425,11 +417,15 @@ int32_t  main (int argc, char **argv)
     //
     while (!feof (fptr))
     {
-		for (index                = (lineposition + 1);
-			 index               <  linewidth;
-			 index                = index + 1)
-		{
-			get_word (fptr, (line+index));
+        for (index                = (lineposition + 1);
+             index               <  BUFFER;
+             index                = index + 1)
+        {
+            ////////////////////////////////////////////////////////////////////////////
+            //
+            // Obtain words in line
+            //
+            get_word (fptr, (line+index));
 
             ////////////////////////////////////////////////////////////////////////////
             //
@@ -440,86 +436,92 @@ int32_t  main (int argc, char **argv)
                 break;
             }
 
-			lineposition                = lineposition + 1;
-		}
+            ////////////////////////////////////////////////////////////////////////////
+            //
+            // track our current line position
+            //
+            lineposition                = lineposition + 1;
+        }
 
         ////////////////////////////////////////////////////////////////////////////////
         //
         // Check to see if we have encountered a V32 header
         //
-		for (index                      = 0;
-			 index                     <  linewidth;
-			 index                      = index + 1)
-		{
-			word                        = (line+index);
-			headerchk                   = strncmp (word -> data, "V32-", 4);
-			if (headerchk              == MATCH)
-			{
-				byte                    = word -> data;
-				word -> header          = TRUE;
-				switch (*(byte+1))
-				{
-					case 'A': // C-A-RT
-						headertype      = V32_CART;
-						dataflag        = 30;
-						break;
+        for (index                      = 0;
+             index                     <  BUFFER;
+             index                      = index + 1)
+        {
+            word                        = (line+index);
+            headerchk                   = strncmp (word -> data, "V32-", 4);
+            if (headerchk              == MATCH)
+            {
+                word                    = (line+(index+1));
+                byte                    = word -> data;
+                word -> header          = TRUE;
+                switch (*(byte+1))
+                {
+                    case 'A': // C-A-RT
+                        headertype      = V32_CART;
+                        dataflag        = 30;
+                        break;
 
-					case 'B': // V-B-IN
-						headertype      = V32_VBIN;
-						dataflag        = 1;
-						break;
+                    case 'B': // V-B-IN
+                        headertype      = V32_VBIN;
+                        dataflag        = 1;
+                        break;
 
-					case 'S': // V-S-ND
-						headertype      = V32_VSND;
-						dataflag        = 1;
-						break;
+                    case 'S': // V-S-ND
+                        headertype      = V32_VSND;
+                        dataflag        = 1;
+                        break;
 
-					case 'T': // V-T-EX
-						headertype      = V32_VTEX;
-						dataflag        = 2;
-						break;
+                    case 'T': // V-T-EX
+                        headertype      = V32_VTEX;
+                        dataflag        = 2;
+                        break;
 
-					case 'E': // M-E-MC
-						headertype      = V32_MEMC;
-						dataflag        = 1;
-						break;
+                    case 'E': // M-E-MC
+                        headertype      = V32_MEMC;
+                        dataflag        = 1;
+                        break;
 
-					case 'I': // B-I-OS
-						headertype      = V32_BIOS;
-						dataflag        = 14;
-						break;
+                    case 'I': // B-I-OS
+                        headertype      = V32_BIOS;
+                        dataflag        = 14;
+                        break;
 
-					default:
-						fprintf (stdout, "HEADERTYPE hit default\n");
-						headertype      = 0;
-						dataflag        = 0;
-						break;
-				}
-			}
-			else
-			{
+                    default:
+                        fprintf (stdout, "HEADERTYPE hit default\n");
+                        headertype      = 0;
+                        dataflag        = 0;
+                        word -> header  = FALSE;
+                        break;
+                }
+            }
+            else
+            {
 
-				////////////////////////////////////////////////////////////////////////
-				//
-				// If  not  header or  header  content  data, check  for  address
-				// highlight match  (cycle through linked list),  and display the
-				// word
-				//
-				else
-				{
-					tmp                               = list;
-					while (tmp                       != NULL)
-					{
-						if (tmp -> addr              == wordoffset)
-						{
-							fprintf (color, "\e[1;33m");
-							word -> flag              = 1;
-							break;
-						}
-						tmp                           = tmp -> next;
-					}
-				}
-			}
+                ////////////////////////////////////////////////////////////////////////
+                //
+                // If  not  header or  header  content  data, check  for  address
+                // highlight match  (cycle through linked list),  and display the
+                // word
+                //
+                else
+                {
+                    tmp                               = list;
+                    while (tmp                       != NULL)
+                    {
+                        if (tmp -> addr              == wordoffset)
+                        {
+                            fprintf (color, "\e[1;33m");
+                            word -> flag              = 1;
+                            break;
+                        }
+                        tmp                           = tmp -> next;
+                    }
+                }
+            }
         }
 
         ////////////////////////////////////////////////////////////////////////////////
@@ -1736,7 +1738,7 @@ void  get_word (FILE *fptr, Word *word)
 //
 // new_word(): allocate and initialize a new word array, size of given length
 //
-Word  *new_word (uint8_t length)
+Word  *new_word (void)
 {
     ////////////////////////////////////////////////////////////////////////////////////
     //
