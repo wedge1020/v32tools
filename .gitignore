@@ -53,3 +53,7 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+# repository-specific data
+bin/*
+carts/*

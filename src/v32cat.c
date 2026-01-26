@@ -1,4 +1,3 @@
-#!/usr/bin/env -S tcc -run
 //
 // v32cat.c - C script to display hex output of binary file, highlighting
 //            recognized sections
@@ -91,7 +90,6 @@ int32_t  main (int argc, char **argv)
     uint8_t   lineflag             = 0;
     uint8_t   skipflag             = 0;
     uint8_t   wordflag             = WORD_CLEAR;
-    uint8_t   progressflag         = 0;
     uint8_t   renderflag           = 1;
     uint8_t   flag                 = 0;
     uint8_t   count                = 0;
@@ -112,7 +110,6 @@ int32_t  main (int argc, char **argv)
     int32_t   opt                  = 0;
     int32_t   wordsize             = 4;        // Vircon32 CPU word size (in bytes)
     uint8_t   linewidth            = wordsize; // how many words per line
-    int32_t   this_option_optind   = optind ? optind : 1;
     int32_t   option_index         = 0;
     Byte     *line                 = NULL;     // array for line input
     Byte     *line2                = NULL;     // array for line reversal
@@ -190,10 +187,10 @@ int32_t  main (int argc, char **argv)
 
             case 'r':
                 token              = strtok (optarg, "-");
-                offset             = strtol (token, NULL, 16);
+                offset             = strtol ((char *) token, NULL, 16);
 
                 token              = strtok (NULL,   "-");
-                bound              = strtol (token, NULL, 16);
+                bound              = strtol ((char *) token, NULL, 16);
 
                 for (index = offset; index <= bound; index++)
                 {
@@ -246,7 +243,7 @@ int32_t  main (int argc, char **argv)
                 break;
 
             case 'h':
-                display_usage (argv[0]);
+                display_usage ((int8_t *) argv[0]);
                 break;
         }
         opt                        = getopt_long (argc, argv,
@@ -566,7 +563,7 @@ int32_t  main (int argc, char **argv)
             if ((incomplete                  >  -1) &&
                 (index                       >= incomplete))
             {
-                fprintf (stdout, "   ", incomplete);
+                fprintf (stdout, "   ");
                 if (((index + 1) % wordsize) == 0)
                 {
                     fprintf (stdout, " ");
@@ -698,7 +695,7 @@ int32_t  main (int argc, char **argv)
                             for (count = 0; count < wordsize; count++)
                             {
                                 imm           = (immediate+count);
-                                data          = fgetc(iptr);
+                                data          = fgetc (iptr);
                                 imm -> value  = data;
                             }
                             immval            = get_word (immediate, 0, WORD_LITTLE);
@@ -799,7 +796,7 @@ int32_t  main (int argc, char **argv)
                                     break;
 
                                 default: // CART name
-                                    token     = get_str_word (line, index);
+                                    token     = (int8_t *) get_str_word (line, index);
                                     fprintf (stdout, "%-11s ",  token);
                                     break;
                             }
@@ -1278,18 +1275,25 @@ uint32_t  get_word (Byte *line, int32_t  offset, uint8_t flag)
 //
 uint8_t  *get_str_word (Byte *line, int32_t  offset)
 {
-    int32_t   index        = 0;
-    uint32_t  data         = 0;
-    uint8_t   pos          = 0;
-    uint8_t   word[12];
+    int32_t   index          = 0;
+    uint8_t  *word           = NULL;
 
-    for (index = 0; index < 4; index++)
+    word                     = (uint8_t *) malloc (sizeof (uint8_t) * 12);
+    if (word                == NULL)
     {
-        word[(3*index)+0]  = ' ';
-        word[(3*index)+1]  = (line+offset+index) -> value;
-        word[(3*index)+2]  = ' ';
+        fprintf (stderr, "[get_str_word] error allocating for word!\n");
+        exit (5);
     }
-    word[11]               = '\0';
+
+    for (index               = 0;
+         index              <  4;
+         index               = index + 1)
+    {
+        *(word+(3*index)+0)  = ' ';
+        *(word+(3*index)+1)  = (line+offset+index) -> value;
+        *(word+(3*index)+2)  = ' ';
+    }
+    *(word+11)               = '\0';
 
     return (word);
 }
@@ -1310,7 +1314,6 @@ void  decode (uint32_t word, uint32_t immediate_value)
     uint8_t   category   = 0;
     uint8_t   attribute  = 0;
     uint16_t  portnum    = 0;
-    uint32_t  data[11];
 
     ////////////////////////////////////////////////////////////////////////////////////
     //

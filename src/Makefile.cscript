@@ -1,0 +1,21 @@
+LIBS =
+CFLAGS = -Wall --std=gnu18 -funsigned-char -Wno-unused-value
+INC = 
+CC = gcc
+SRC = $(wildcard *.c)
+BIN = $(SRC:.c=)
+all: $(SRC) $(BIN)
+
+debug: CFLAGS += -DDEBUG -g
+debug: DEBUG = debug
+debug: $(SRC) $(BIN)
+
+.c:
+	@mkdir -p ../bin
+	$(info tool: $@.c -> $@)
+	@echo '#!/usr/bin/env -S tcc -run' >  ../bin/$@
+	@cat $@.c                          >> ../bin/$@
+	@chmod 0700 ../bin/*
+
+clean:
+	@rm -vf .*.sw[op] *.save* *~ ../bin/* core errors

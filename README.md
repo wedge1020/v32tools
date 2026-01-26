@@ -2,6 +2,24 @@
 
 Vircon32 command-line binary and data analysis tools
 
+## BUILDING
+
+To build  the v32tools, change into  the `src/` directory and  run `make`
+with one of two options:
+
+  * `make gcc` - compiles the C code to binary form
+  * `make cscript` - creates `tcc` interpreted C scripts
+
+Executable files will be stored in `bin/`.
+
+## INSTALL
+
+To install,  also from the `src/`  directory, run `make` with  one of two
+options:
+
+  * `make install` - copies executable files into your user's `~/bin/`
+  * `make sysinstall` - copies executables into `/usr/local/bin/`
+
 ## v32cat
 
 Like the UNIX `cat` tool, **v32cat**  will display (in hex) and highlight
@@ -83,5 +101,5 @@ the file): each V32 header, and its starting offset.
 
 ### verbosity
 
-With the  inclusion of the  `-v` or `--verbose` argument,  additional V32
-header information will be displayed.
+With the inclusion of the `-l`, `-v`, or `--verbose` argument, additional
+V32 header information will be displayed.
