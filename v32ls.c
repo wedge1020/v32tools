@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <getopt.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -25,8 +26,9 @@ uint8_t  headertype;
 uint8_t  wordsize;
 uint32_t wordoffset;
 
-void     get_word (FILE *, int8_t *);
-uint32_t wtoi     (int8_t *);
+void     display_usage (int8_t *);
+void     get_word      (FILE *, int8_t *);
+uint32_t wtoi          (int8_t *);
 
 int32_t  main (int  argc, char **argv)
 {
@@ -38,7 +40,6 @@ int32_t  main (int  argc, char **argv)
     FILE     *verbose               = NULL;       // /dev/null or dup of stdout
     int32_t   byte                  = 0;          // current byte read
     int32_t   count                 = 0;          // secondary index variable
-    int32_t   currentfile           = 0;          // index of current file
     int32_t   headercheck           = 0;          // comparison variable
     int32_t   index                 = 0;          // primary loop index variable
     int32_t   incomplete            = 0;          // tracking non-word boundary ends
@@ -51,9 +52,47 @@ int32_t  main (int  argc, char **argv)
     uint32_t  value                 = 0;          // integer representation of word
     int8_t   *word                  = NULL;       // array containing word hex bytes
     int8_t   *argptr                = NULL;       // shorthand for argv array
-    uint8_t   verboseflag           = TRUE;       // flag for verbose mode
+    uint8_t   verboseflag           = FALSE;      // flag for verbose mode
+    int32_t   digit_optind          = 0;
+    int32_t   this_option_optind    = 0;
+    int32_t   option_index          = 0;
+    int32_t   opt                   = 0;
 
-    // getopt processing here
+    ////////////////////////////////////////////////////////////////////////////////////
+    //
+    // getopt long arguments and their short option mappings
+    //
+    struct option long_options[]    = {
+        {"verbose", no_argument,       0, 'v' },
+        {"help",    no_argument,       0, 'h' },
+        {0,         0,                 0,  0  }
+    };
+
+    opt                             = getopt_long (argc, argv,
+                                                   "lv",
+                                                   long_options,
+                                                   &option_index);
+    while (opt                     != -1)
+    {
+        this_option_optind          = optind ? optind : 1;
+
+        switch (opt)
+        {
+            case 'l':
+            case 'v':
+                verboseflag         = TRUE;
+                break;
+
+            case 'h':
+                display_usage (argv[0]);
+                break;
+        }
+
+        opt                         = getopt_long (argc, argv,
+                                                   "lv",
+                                                   long_options,
+                                                   &option_index);
+    }
 
     ////////////////////////////////////////////////////////////////////////////////////
     //
@@ -61,15 +100,6 @@ int32_t  main (int  argc, char **argv)
     //
     if (verboseflag                == TRUE)
     {
-        /*
-        value                       = dup (1);
-        verbose                     = fdopen (value, "w");
-        if (verbose                == NULL)
-        {
-            fprintf (stderr, "[error] could not enable verbosity!\n");
-            exit (1);
-        }
-        */
         verbose                     = stdout;
     }
 
@@ -103,7 +133,7 @@ int32_t  main (int  argc, char **argv)
     //
     // Process for each specified file
     //
-    for (currentfile = 1; currentfile < argc; currentfile++)
+    while (optind                  <  argc)
     {
         ////////////////////////////////////////////////////////////////////////////////////
         //
@@ -121,7 +151,7 @@ int32_t  main (int  argc, char **argv)
         //
         if (argc                   >  1)
         {
-            argptr                  = argv[currentfile];
+            argptr                  = argv[optind];
             fptr                    = fopen (argptr, "r");
             if (fptr               == NULL)
             {
@@ -130,7 +160,7 @@ int32_t  main (int  argc, char **argv)
             }
         }
 
-        fprintf (stdout, "%s:\n", argv[currentfile]);
+        fprintf (stdout, "%s:\n", argv[optind]);
 
         ////////////////////////////////////////////////////////////////////////////////////
         //
@@ -258,12 +288,26 @@ int32_t  main (int  argc, char **argv)
 
         fclose (fptr);
         fprintf (stdout, "\n");
+        optind                      = optind + 1;
     }
 
     fclose (verbose);
     free (word);
 
     return (0);
+}
+
+void  display_usage (int8_t *argv)
+{
+    fprintf (stdout, "Usage: %s [OPTION]... FILE\n", argv);
+    fprintf (stdout, "List recognized Vircon32 section headers read from FILE.\n\n");
+    fprintf (stdout, "Mandatory arguments to long options are mandatory for ");
+    fprintf (stdout, "short options too.\n\n");
+    fprintf (stdout, "  -l                       for ls-style usage (same as -v)\n");
+    fprintf (stdout, "  -v, --verbose            enable operational verbosity\n");
+    fprintf (stdout, "  -h, --help               display this usage information\n\n");
+
+    exit (0);
 }
 
 void  get_word (FILE *fptr, int8_t *word)
