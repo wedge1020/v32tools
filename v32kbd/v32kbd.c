@@ -10,16 +10,20 @@
 | `IN`  | `0x40C` | `INP_GamepadButtonR`     | `R` key input (W on keyboard)        |
 */
 
-void  v32kbd_read (v32kbd *keyboard)
+////////////////////////////////////////////////////////////////////////////////////////
+//
+// v32kbd_read(): check for new input, returning the keyval if so
+//
+int  v32kbd_read (v32kbd *keyboard)
 {
     ////////////////////////////////////////////////////////////////////////////////////
     //
     // Declare and initialize local variables
     //
-    int  keyval             = 0;
-    int  port               = 0x000;
-    int  state              = 0;
-    int *time               = NULL;
+    int   keyval            = 0;
+    int   port              = 0x000;
+    int   state             = 0;
+    int  *time              = NULL;
 
     ////////////////////////////////////////////////////////////////////////////////////
     //
@@ -83,6 +87,8 @@ void  v32kbd_read (v32kbd *keyboard)
             }
         }
     }
+
+    return (keyval);
 }
 
 /* keyboard.h
