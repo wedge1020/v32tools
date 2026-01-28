@@ -1,6 +1,12 @@
 # v32tools
 
-Vircon32 command-line binary and data analysis tools
+A set  of handy  Vircon32 tools,  for a variety  of debugging  and fringe
+purposes.
+
+There are tools for binary/data analysis like `v32cat` and `v32ls`, along
+with obscene peripheral hacks like `keyboard2gamepad` and `v32kbd`, which
+attempts to  allow the  use of  a standard  computer keyboard  within the
+Vircon32 environment.
 
 ## BUILDING
 
