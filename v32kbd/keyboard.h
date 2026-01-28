@@ -39,6 +39,14 @@
 
 //////////////////////////////////////////////////////////////////////////////
 //
+// include needed Vircon32 DevTools headers
+//
+#include "input.h"
+#include "misc.h"
+#include "time.h"
+
+//////////////////////////////////////////////////////////////////////////////
+//
 // the v32key struct  stores the  integer value of the  keypress,  in the
 // v32kbd linked list of input values
 //
@@ -64,25 +72,25 @@ struct v32kbd
 //
 // API: function prototypes for the functions in this library
 //
-v32key *v32key_newkey (void);               // allocate new v32key
-v32kbd *v32kbd_init   (int);                // initialze v32kbd instance
-int     v32kbd_addkey (v32kbd *, v32key *); // add new key input to list
-v32key *v32kbd_getkey (v32kbd *);           // obtain next key of input
-bool    v32kbd_probe  (v32kbd *);           // check for input, update list
-int     v32kbd_read   (v32kbd *);           // obtain next key from input
+v32key *v32key_newkey (int     keyval);                // allocate new v32key
+v32kbd *v32kbd_init   (int     gamepad);               // initialize keyboard
+int     v32kbd_addkey (v32kbd *keyboard, v32key *key); // add new key to list
+v32key *v32kbd_getkey (v32kbd *keyboard);              // obtain next key
+bool    v32kbd_probe  (v32kbd *keyboard);              // check for input
+int     v32kbd_read   (v32kbd *keyboard);              // read next input
 
 //////////////////////////////////////////////////////////////////////////////
 //
 // v32key_newkey(): allocate a new v32key for the v32kbd input list
 //
-v32key *v32key_newkey (void)
+v32key *v32key_newkey (int  keyval)
 {
     v32key *newkey       = NULL;
 
     newkey               = (v32key *) malloc (sizeof (v32key) * 1);
     if (newkey          != NULL)
     {
-        newkey -> value  = 0;
+        newkey -> value  = keyval;
         newkey -> next   = NULL;
     }
 }
@@ -167,11 +175,12 @@ bool v32kbd_probe (v32kbd *keyboard)
     //
     // Declare and initialize local variables
     //
-    bool  result            = false;
-    int   keyval            = 0;
-    int   port              = 0x000;
-    int   state             = 0;
-    int  *time              = NULL;
+    bool    result          = false;
+    int     keyval          = 0;
+    int     port            = 0x000;
+    int     state           = 0;
+    int    *time            = NULL;
+    v32key *key             = NULL;
 
     //////////////////////////////////////////////////////////////////////////
     //
@@ -195,7 +204,9 @@ bool v32kbd_probe (v32kbd *keyboard)
 
             //////////////////////////////////////////////////////////////////
             //
-            // Cycle through the gamepad buttons via ports in assembly
+            // Cycle through the gamepad buttons via ports in assembly;
+            // the hex values for the ports are used instead of  names,
+            // so that they can be iterated through with a loop
             //
             for (port       = 0x406;  // INP_GamepadButtonStart
                  port      <= 0x40C;  // INP_GamepadButtonR
@@ -220,7 +231,7 @@ bool v32kbd_probe (v32kbd *keyboard)
                 //
                 if (state  >  0) // positive means pressed
                 {
-                    keyval  = key | (1 << (port - 0x406));
+                    keyval  = keyval | (1 << (port - 0x406));
                 }
             }
 
@@ -230,9 +241,10 @@ bool v32kbd_probe (v32kbd *keyboard)
             //
             if (keyval     >  0)
             {
-                v32kbd_addkey (keyboard, keyval);
-                time        = keyboard -> lastread;
-                time        = get_frame_counter ();
+                key         = v32key_newkey (keyval);
+                v32kbd_addkey (keyboard, key);
+                time        = &(keyboard -> lastread);
+                *time       = get_frame_counter ();
                 result      = true;
             }
         }
