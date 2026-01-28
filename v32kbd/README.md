@@ -25,10 +25,29 @@ existing DevTools headers).
 
 v32kbd provides the following functions:
 
-### `v32kbd_read()`
+### input key transactional unit: `v32key` struct
+
+### keyboard transactional unit: `v32kbd` struct
+
+### generate new key node for list: `v32key_newkey()`
+
+### initialize keyboard instance: `v32kbd_init()`
+
+### add new key to keyboard input list: `v32kbd_addkey()`
+
+### get next key of input from input list: `v32kbd_getkey()`
+
+### probe for new keyboard activity: `v32kbd_probe()`
+
+```
+bool    v32kbd_probe  (v32kbd *);
+```
+
+### Read the next key: `v32kbd_read()`
 
 The primary  transaction of the library:  it checks for new  key entries,
-returning the value of the key pressed.
+returning the value (compatible with the  BIOS font region for display of
+characters) of the key pressed.
 
 ```
 int  v32kbd_read (v32kbd *);

@@ -67,6 +67,7 @@ struct v32kbd
 v32key *v32key_newkey (void);               // allocate new v32key
 v32kbd *v32kbd_init   (int);                // initialze v32kbd instance
 int     v32kbd_addkey (v32kbd *, v32key *); // add new key input to list
+v32key *v32kbd_getkey (v32kbd *);           // obtain next key of input
 bool    v32kbd_probe  (v32kbd *);           // check for input, update list
 int     v32kbd_read   (v32kbd *);           // obtain next key from input
 
