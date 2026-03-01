@@ -4,7 +4,10 @@ A set  of handy  Vircon32 tools,  for a variety  of debugging  and fringe
 purposes.
 
 There are tools  for binary/data analysis, obscene  peripheral hacks, and
-simulators/debuggers.
+other explorations that could eventually turn into standalone tools.
+
+The `v32sim` program started here, until  it was forked off into its own,
+separate repository.
 
 ## BUILDING
 
@@ -135,18 +138,6 @@ the file): each V32 header, and its starting offset.
 
 With the inclusion of the `-l`, `-v`, or `--verbose` argument, additional
 V32 header information will be displayed.
-
-## v32sim
-
-This is an attempt at a  Vircon32 simulator, meant for debugging assembly
-code programs written for the system.
-
-It has a simple text interface,  aiming to really only target a debugging
-interface similar to that of `gdb`.
-
-With  it,  one can  single-step  through  a running  program,  displaying
-various  registers and  memory locations,  watching as  they change  from
-instruction to instruction.
 
 ## v32kbd
 
