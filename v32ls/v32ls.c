@@ -285,7 +285,7 @@ int32_t  main (int  argc, char **argv)
                         fprintf (verbose, "    * texture resolution: %3u x ", vtex_wide);
                         get_word (fptr, word);
                         vtex_high   = (uint16_t) wtoi (word);
-                        fprintf (verbose, "%-3u\n\n", vtex_high);
+                        fprintf (verbose, "%-3u\n", vtex_high);
                         fseek (fptr, (vtex_wide * vtex_high) * 4, SEEK_CUR);
                         wordoffset  = wordoffset + (vtex_wide * vtex_high);
                         break;
