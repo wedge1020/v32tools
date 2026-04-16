@@ -1,0 +1,147 @@
+#!/usr/bin/env bash
+### 
+###      v32pp - bash-based Vircon32 assembly language preprocessor
+### 
+###       usage: v32pp ASMFILE.ASM
+### 
+###    options - description
+### ==========   ==================================================
+###   noblanks - filter out blank lines
+### nocomments - filter out comments
+###    verbose - enable increased verbosity
+###       help - display this help and exit
+### 
+### NOTE: v32pp does not modify the original source file, and it
+###       will currently  just display the resulting data,  that
+###       which is post-processed, to STDOUT
+### 
+##############################################################################
+
+##############################################################################
+##
+## Process command-line arguments
+##
+DO_HELP=$(echo "${*}" | egrep -qio '\<help\>' && echo "true" || echo "false")
+VERBOSE=$(echo "${*}" | egrep -qio '\<verbos' && echo "true" || echo "false")
+NOBLANK=$(echo "${*}" | egrep -qio '\<noblan' && echo "true" || echo "false")
+COMMENT=$(echo "${*}" | egrep -qio '\<nocomm' && echo "true" || echo "false")
+
+##############################################################################
+##
+## Display usage information if requested (and exit)
+##
+[ "${DO_HELP}" = "true" ] && cat ${0} | grep '^### ' | tr -d '#' && exit 0
+
+##############################################################################
+##
+## declare variables
+##
+SRC="${1}"
+CFG=$(mktemp -p /tmp preprocessor.XXXX)
+SYM=$(mktemp -p /tmp preprocessor.XXXX)
+TMP=$(mktemp -p /tmp preprocessor.XXXX)
+ASM="${TMP}.asm"
+
+##############################################################################
+##
+## ensure the CFG and TMP temporary files are empty
+##
+echo -n                                                            >  ${CFG}
+echo -n                                                            >  ${SYM}
+echo -n                                                            >  ${TMP}
+
+##############################################################################
+##
+## make backup copy
+##
+cat ${SRC}                                                         >  ${ASM}
+
+##############################################################################
+##
+## process %include directives
+##
+incchk=$(cat ${ASM} | grep '%include' | wc -l)
+while [ "${incchk}" -gt 0 ]; do
+    REGEX='^.*\%include  *"\([^"]*\)".*$'
+    cat ${ASM} | sed "s/${REGEX}/include(\1)/g"                    >  ${TMP}
+    cat ${TMP} | m4                                                >  ${ASM}
+    incchk=$(cat ${ASM} | grep '%include' | wc -l)
+done
+
+##############################################################################
+##
+## process %ifdef directives - will likely only work for one, no nested ifs
+##
+ifchk=$(cat ${ASM} | grep '\%ifdef' | wc -l)
+if [ "${ifchk}" -gt 0 ]; then
+
+    REGEX='^.*\%ifdef  *\([A-Za-z_][A-Za-z0-9_]*\).*$'
+
+    cat ${ASM} | sed "s/${REGEX}/ifdef(\`\1\',\`/g"                >  ${TMP}
+    cat ${TMP} | sed "s/^.*\%endif.*$/\',)dnl/g"                   >  ${ASM}
+fi
+
+##############################################################################
+##
+## process %ifndef directives - will likely only work for one, no nested ifs
+##
+ifchk=$(cat ${ASM} | grep '\%ifndef' | wc -l)
+if [ "${ifchk}" -gt 0 ]; then
+
+    REGEX='^.*\%ifndef  *\([A-Za-z_][A-Za-z0-9_]*\).*$'
+
+    cat ${ASM} | sed "s/${REGEX}/ifdef(\`\1\',,\`/g"               >  ${TMP}
+    cat ${TMP} | sed "s/^.*\%endif.*$/\')dnl/g"                    >  ${ASM}
+fi
+
+##############################################################################
+##
+## process simple %define symbols
+##
+REGEX='^.*\%define  *\([^ ]*\)  *\([^/]*\).*$'
+cat ${ASM} | grep    "${REGEX}" | sed "s/${REGEX}/define(\1,\2)/g" >  ${CFG}
+cat ${ASM} | grep -v "${REGEX}"                                    >  ${TMP}
+cat ${TMP}                                                         >  ${ASM}
+
+##############################################################################
+##
+## process math %define symbols
+##
+REGEX='^.*\define[(]\([^)]*\),\(.*[+-][^)]*\)[)]$'
+cat ${CFG} | sed "s/${REGEX}/define(\1,eval(\2))/g"                >  ${TMP}
+cat ${TMP}                                                         >  ${CFG}
+
+##############################################################################
+##
+## process even simpler %define symbols (just symbol, no value)
+##
+REGEX='^.*\%define  *\([^ ]*\)$'
+cat ${ASM} | sed "s/${REGEX}/define(\1,1)/g"                       >  ${TMP}
+cat ${TMP}                                                         >  ${ASM}
+
+##############################################################################
+##
+## remove all comments from the file
+##
+if [ "${COMMENT}" = "true" ]; then
+    cat ${ASM} | sed 's/;.*$//g'                                   >  ${TMP}
+    cat ${TMP}                                                     >  ${ASM}
+fi
+
+##############################################################################
+##
+## display the processed file to STDOUT, potentially removing blank lines
+##
+if [ "${NOBLANK}" = "true" ]; then
+    cat ${CFG} ${ASM} | m4 | grep -v '^ *$'
+else
+    cat ${CFG} ${ASM} | m4
+fi
+
+##############################################################################
+##
+## remove all temporary files
+##
+rm -f ${ASM} ${CFG} ${SYM} ${TMP}
+
+exit 0

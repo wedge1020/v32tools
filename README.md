@@ -168,3 +168,33 @@ to fully meet the intended needs of `v32kbd`.
 
 This isn't functional yet, it doesn't really do anything yet. Good things
 come to those who wait.
+
+## v32as
+
+This is a  proof-of-concept BASH-based Vircon32 assembler.  Yes, you read
+that right:  an obscenely  high-level shell  script performing  among the
+lowest-level of data transactions.
+
+It is powered and heavily reliant  upon Regular Expressions, which do the
+bulk of the heavy lifting.
+
+Ultimately  performance  doesn't  really   matter,  as  assembling  isn't
+something needing to be done multiple times a second.
+
+## v32pp
+
+A BASH-based preprocessor, for use  with Vircon32 assembly code files. It
+makes use of  Regular Expressions and the M4 preprocessor  to pull of its
+sorcery.
+
+Currently supports:
+
+  * `%include` for including other files (works, including for nested)
+  * `%define` for defining symbols, and some added variants:
+    * `%define SYMBOL` works
+    * `%define SYMBOL value` works
+    * `%define SYMBOL OTHERSYMBOL+SOMEVALUE` works
+    * `%define SYMBOL OTHERSYMBOL-SOMEVALUE` works
+    * macros have not been looked at yet, so that's a negatory
+  * `ifdef` should work (no nesting), terminated by a `%endif`
+  * `ifndef` works (no nesting), terminated by a `%endif`
