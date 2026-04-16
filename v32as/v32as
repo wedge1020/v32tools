@@ -1,10 +1,35 @@
 #!/usr/bin/env bash
-###
-### v32asm - attempt at a Vircon32 assembler written in bash; initially,
-###          to assist in prototyping and testing some RegEx that I need
-###          for v32sim's live assembly injection.
-###
+### 
+###             v32as - Vircon32 assembler written in BASH, powered by
+###                     Regular Expressions
+### 
+###              usage: v32as [OPTION..] ASMFILE.ASM
+### 
+###            option - description
+### =================   ===================================================
+###  outfile=FILE.OBJ   specify output OBJ file
+###           verbose   increase verbosity
+###              help   display usage information and exit
+### 
+### NOTE: It is meant for v32pp, the Vircon32 Assembly Pre-Processor, to be
+### run prior to passing the code through this assembler. Furthermore,  for
+### the production of an actual VBIN file, a further tool is required. This
+### assembler will ONLY convert to machine code, and nothing more.
+### 
 ########################################################################################
+
+##############################################################################
+##
+## Process command-line arguments
+##
+DO_HELP=$(echo "${*}" | egrep -qio '\<help\>' && echo "true" || echo "false")
+VERBOSE=$(echo "${*}" | egrep -qio '\<verbos' && echo "true" || echo "false")
+
+##############################################################################
+##
+## Display usage information if requested (and exit)
+##
+[ "${DO_HELP}" = "true" ] && cat ${0} | grep '^### ' | tr -d '#' && exit 0
 
 ########################################################################################
 ##
@@ -182,9 +207,9 @@ function parse_imm()
     for attr in bin oct dec1 dec2 hex hex2; do
         d_imm=$(echo "${token}"  | egrep -o "${ITYPE[${attr}]}")
         t_imm=$(echo "${token}"  | egrep -o "${ITYPE[${attr}]}" | wc -l)
-#		echo "ITYPE: ${ITYPE[*]}" 1>&2
-#		echo "d_imm: ${d_imm}" 1>&2
-#		echo "t_imm: ${i_imm}" 1>&2
+#        echo "ITYPE: ${ITYPE[*]}" 1>&2
+#        echo "d_imm: ${d_imm}" 1>&2
+#        echo "t_imm: ${i_imm}" 1>&2
         if [ "${t_imm}" -eq 1 ]; then
             case "${attr}" in
                 "bin")
@@ -253,7 +278,7 @@ function parse_param()
         p_data=$(echo "${token}"  | egrep -o "${OTYPE[${attr}]}")
         p_type=$(echo "${token}"  | egrep -o "${OTYPE[${attr}]}" | wc -l)
 
-#		echo "attr: ${attr}, p_type: ${p_type}, p_data: ${p_data}" 1>&2
+#        echo "attr: ${attr}, p_type: ${p_type}, p_data: ${p_data}" 1>&2
         if [ "${p_type}" -eq 1 ]; then
             case "${attr}" in
                 "index")
@@ -311,10 +336,10 @@ function parse_param()
                     ;;
 
                 "immediate")
-#					echo "token: ${token}" 1>&2
+#                    echo "token: ${token}" 1>&2
                     i_data=$(parse_imm "${token}")
                     [ ! -z "${i_data}" ] && let IMM_TALLY=IMM_TALLY+1
-#					echo "i_data: ${i_data}" 1>&2
+#                    echo "i_data: ${i_data}" 1>&2
                     ;;
             esac
 
@@ -429,7 +454,7 @@ if [ "${num_operands}" -ge 1 ]; then
             DSTREG=$(echo "${dstresult}"       | cut -d':' -f2)
             DSTVAL=$(echo "${DSTREG}"          | tr -d 'A-Za-z:')
             DSTVAL=$(echo "obase=2; ${DSTVAL}" | bc -q)
-			DSTVAL=$(printf "%.4d" "${DSTVAL}")
+            DSTVAL=$(printf "%.4d" "${DSTVAL}")
             ;;
     esac
 fi
@@ -462,7 +487,7 @@ if [ "${num_operands}" -eq 2 ]; then
             SRCREG=$(echo "${srcresult}"       | cut -d':' -f2)
             SRCVAL=$(echo "${SRCREG}"          | tr -d 'A-Za-z:')
             SRCVAL=$(echo "obase=2; ${SRCVAL}" | bc -q)
-			SRCVAL=$(printf "%.4d" "${SRCVAL}")
+            SRCVAL=$(printf "%.4d" "${SRCVAL}")
             ;;
     esac
 fi
@@ -474,22 +499,22 @@ if [ "${IMM_TALLY}" -gt 1 ]; then
 fi
 
 if [ "${the_opcode}" = "MOV" ]; then
-	for ((index=0; index<8; index++)); do
-		the_operands=$(echo "${line_input}" | cut -d' ' -f2-)
-		echo ">${the_operands}<"
-		echo "index: ${index}"
-		echo ">${MOV_PARAM[${index}]}<"
-		match=$(echo "${the_operands}" | egrep -qio "${MOV_PARAM[${index}]}" && echo "true" || echo "false")
-		echo "match is: ${match}"
-		if [ "${match}" = "true" ]; then
-			echo "index is: ${index}"
-			ADDRMODE=$(echo "obase=2; ${index}" | bc -q)
-			ADDRMODE=$(printf "%.3d" "${ADDRMODE}")
-			break
-		fi
-	done
+    for ((index=0; index<8; index++)); do
+        the_operands=$(echo "${line_input}" | cut -d' ' -f2-)
+        echo ">${the_operands}<"
+        echo "index: ${index}"
+        echo ">${MOV_PARAM[${index}]}<"
+        match=$(echo "${the_operands}" | egrep -qio "${MOV_PARAM[${index}]}" && echo "true" || echo "false")
+        echo "match is: ${match}"
+        if [ "${match}" = "true" ]; then
+            echo "index is: ${index}"
+            ADDRMODE=$(echo "obase=2; ${index}" | bc -q)
+            ADDRMODE=$(printf "%.3d" "${ADDRMODE}")
+            break
+        fi
+    done
 else
-	ADDRMODE="000"
+    ADDRMODE="000"
 fi
 
 PORT="00000000000000"
@@ -515,7 +540,7 @@ instruction=$(echo "obase=10; ibase=2; ${binary}" | bc -q)
 instruction=$(printf "0x%.8X" "${instruction}")
 echo "instruction: ${instruction}"
 if [ ! -z "${IMMEDIATE}" ]; then
-	echo "immediate:   ${IMMEDIATE}"
+    echo "immediate:   ${IMMEDIATE}"
 fi
 
 echo "done"
