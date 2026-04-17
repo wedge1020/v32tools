@@ -35,7 +35,8 @@ VERBOSE=$(echo "${*}" | egrep -qio '\<verbos' && echo "true" || echo "false")
 ##
 ## Declare and initialize variables
 ##
-FLOATIFY="./floatify"
+BINCODE="./bincode"
+FLOATIFY="${BINCODE} -t -f "
 
 ########################################################################################
 ##
@@ -368,9 +369,9 @@ function parse_param()
         p_data=$(echo "${token}"  | egrep -o "${OTYPE[${attr}]}")
         p_type=$(echo "${token}"  | egrep -o "${OTYPE[${attr}]}" | wc -l)
 
-		echo "[parse_param] token:  ${token}"  1>&2
-		echo "[parse_param] p_data: ${p_data}" 1>&2
-		echo "[parse_param] p_type: ${p_type}" 1>&2
+        echo "[parse_param] token:  ${token}"  1>&2
+        echo "[parse_param] p_data: ${p_data}" 1>&2
+        echo "[parse_param] p_type: ${p_type}" 1>&2
 
         if [ "${p_type}" -eq 1 ]; then
             case "${attr}" in
@@ -395,7 +396,7 @@ function parse_param()
 
                     if [ ! "${o_data}" = "+" ]; then # subtraction
                         o_data="+"
-                        i_data=$(./negate ${i_data})
+                        i_data=$(echo "(2^32)-${i_data}" | bc -q)
                     fi
 
                     x_data="[${r_data}+${i_data}]"
@@ -470,7 +471,7 @@ echo "num_operands:    ${num_operands}"
 if [ ! -z "${dst_operand}" ]; then
     dstresult=$(parse_param "${dst_operand}")
 
-	echo "[dst] index / dstresult: ${dstresult}" 1>&2
+    echo "[dst] index / dstresult: ${dstresult}" 1>&2
     p_type=$(echo "${dstresult}" | cut -d':' -f1)
     case "${p_type}" in
         "index")
@@ -563,42 +564,42 @@ if [ "${the_opcode}" = "MOV" ]; then
         case ${index} in
             0) # REG, IMM
                 [ ! -z "${DSTREG}" ] && [   -z "${DSTIMM}" ] && [   -z "${DSTREF}" ] && \
-				[   -z "${SRCREG}" ] && [ ! -z "${SRCIMM}" ] && [   -z "${SRCREF}" ] && break
+                [   -z "${SRCREG}" ] && [ ! -z "${SRCIMM}" ] && [   -z "${SRCREF}" ] && break
                 ;;
 
             1) # REG, REG
                 [ ! -z "${DSTREG}" ] && [   -z "${DSTIMM}" ] && [   -z "${DSTREF}" ] && \
-				[ ! -z "${SRCREG}" ] && [   -z "${SRCIMM}" ] && [   -z "${SRCREF}" ] && break
+                [ ! -z "${SRCREG}" ] && [   -z "${SRCIMM}" ] && [   -z "${SRCREF}" ] && break
                 ;;
 
             2) # REG, [IMM]
                 [ ! -z "${DSTREG}" ] && [   -z "${DSTIMM}" ] && [   -z "${DSTREF}" ] && \
-				[   -z "${SRCREG}" ] && [ ! -z "${SRCIMM}" ] && [ ! -z "${SRCREF}" ] && break
+                [   -z "${SRCREG}" ] && [ ! -z "${SRCIMM}" ] && [ ! -z "${SRCREF}" ] && break
                 ;;
 
             3) # REG, [REG]
                 [ ! -z "${DSTREG}" ] && [   -z "${DSTIMM}" ] && [   -z "${DSTREF}" ] && \
-				[ ! -z "${SRCREG}" ] && [   -z "${SRCIMM}" ] && [ ! -z "${SRCREF}" ] && break
+                [ ! -z "${SRCREG}" ] && [   -z "${SRCIMM}" ] && [ ! -z "${SRCREF}" ] && break
                 ;;
 
             4) # REG, [REG+IMM]
                 [ ! -z "${DSTREG}" ] && [   -z "${DSTIMM}" ] && [   -z "${DSTREF}" ] && \
-				[ ! -z "${SRCREG}" ] && [ ! -z "${SRCIMM}" ] && [ ! -z "${SRCREF}" ] && break
+                [ ! -z "${SRCREG}" ] && [ ! -z "${SRCIMM}" ] && [ ! -z "${SRCREF}" ] && break
                 ;;
 
             5) # [IMM], REG
                 [   -z "${DSTREG}" ] && [ ! -z "${DSTIMM}" ] && [ ! -z "${DSTREF}" ] && \
-				[ ! -z "${SRCREG}" ] && [   -z "${SRCIMM}" ] && [   -z "${SRCREF}" ] && break
+                [ ! -z "${SRCREG}" ] && [   -z "${SRCIMM}" ] && [   -z "${SRCREF}" ] && break
                 ;;
 
             6) # [REG], REG
                 [ ! -z "${DSTREG}" ] && [   -z "${DSTIMM}" ] && [ ! -z "${DSTREF}" ] && \
-				[ ! -z "${SRCREG}" ] && [   -z "${SRCIMM}" ] && [   -z "${SRCREF}" ] && break
+                [ ! -z "${SRCREG}" ] && [   -z "${SRCIMM}" ] && [   -z "${SRCREF}" ] && break
                 ;;
 
             7) # [REG+IMM], REG
                 [ ! -z "${DSTREG}" ] && [ ! -z "${DSTIMM}" ] && [ ! -z "${DSTREF}" ] && \
-				[ ! -z "${SRCREG}" ] && [   -z "${SRCIMM}" ] && [   -z "${SRCREF}" ] && break
+                [ ! -z "${SRCREG}" ] && [   -z "${SRCIMM}" ] && [   -z "${SRCREF}" ] && break
                 ;;
         esac
 

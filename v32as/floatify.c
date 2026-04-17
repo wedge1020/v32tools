@@ -1,3 +1,21 @@
+//
+// floatify.c - obtain raw hex of IEEE754 floating point value
+//
+//
+//
+// if we didn't want to have an extra binary kicking around, but did have
+// perl installed, apparently this also works:
+//
+// perl -e 'print pack("f>", 3.14)' | xxd -p
+//
+// or, python:
+//
+// python3 -c "import struct; import sys; sys.stdout.buffer.write(struct.pack('f', 10.75))" | xxd -p
+//
+// ... although the python variant is endianified
+//
+////////////////////////////////////////////////////////////////////////////////////////
+
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
