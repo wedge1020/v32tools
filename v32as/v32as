@@ -41,7 +41,7 @@ FLOATIFY="./floatify"
 ##
 ## Establish RegEx patterns for tokens
 ##
-OPCODE='\<(IN|JT|JF|[A-Z][A-Z2]{2,4})\>'
+OPCODE='\<(IN|JT|JF|OR|[A-Z][A-Z2]{2,4})\>'
 INT_TWO_OPCODE="\<JT|JF|IEQ|INE|IGT|IGE|ILT|ILE|MOV|LEA|IN|OUT|AND|OR|XOR|SHL"
 INT_TWO_OPCODE="${INT_TWO_OPCODE}|IADD|ISUB|IMUL|IDIV|IMOD|IMIN|IMAX\>"
 FLOAT_TWO_OPCODE="\<FEQ|FNE|FGT|FGE|FLT|FLE|FADD"
@@ -51,9 +51,11 @@ HEX1='\<0[Xx][0-9A-F]{1,8}\>'
 HEX2='\<[0-9A-F]{1,8}[Hh]\>'
 OCT='\<0[0-7]+\>'
 BIN='\<0[Bb][01]{1,32}\>'
-DEC1='\<[0-9]|[1-9][0-9]*\>'
-DEC2='\<#[0-9]|[1-9][0-9]*\>'
-FLOAT='\<[0-9]\.[0-9][0-9]*|[1-9][0-9]*\.[0-9][0-9]*\>'
+DEC1='\<[+-]?([0-9]|[1-9][0-9]*)\>'
+DEC2='\<#[+-]?([0-9]|[1-9][0-9]*)\>'
+# word boundaries not catching any signed values
+# echo "MOV R5, +0" | tr ' ' '\n' | tr -s ' ' | egrep -o '^[-+]?([1-9]|[1-9][0-9]*)|[+]?0$'
+FLOAT='\<[+-]?([0-9]\.[0-9][0-9]*|[1-9][0-9]*\.[0-9][0-9]*)\>'
 IMMEDIATE="(${BIN}|${OCT}|${DEC1}|${DEC2}|${FLOAT}|${HEX1}|${HEX2})"
 INDEX="[-+]"
 INDEXED="${REGISTER}[-+]${IMMEDIATE}"
