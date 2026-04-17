@@ -30,17 +30,19 @@
 #include <string.h>
 #include <getopt.h>
 
-#define  MODE_NONE      0
-#define  MODE_HEADER    1
-#define  MODE_WORD      2
-#define  MODE_OFFSET    4
-#define  MODE_STRING    8
-#define  MODE_ENDIAN   16
-#define  MODE_FLOAT    32
-#define  MODE_NEGATE   64
-#define  MODE_TEXT    128
-#define  MODE_VERBOSE 256
-#define  MODE_HELP    512
+#define  MODE_NONE        0
+#define  MODE_HEADER      1
+#define  MODE_WORD        2
+#define  MODE_OFFSET      4
+#define  MODE_STRING      8
+#define  MODE_DECODE     16
+#define  MODE_ENDIAN     32
+#define  MODE_FLOAT      64
+#define  MODE_NEGATE    128
+#define  MODE_NOOFFSET  256
+#define  MODE_TEXT      512
+#define  MODE_VERBOSE  1024
+#define  MODE_HELP     2048
 
 typedef  struct   option  gopt_t;
 typedef  union    f2i     f2i_t;
@@ -87,17 +89,21 @@ int  main (int  argc, char **argv)
         { "word",          required_argument, 0, 'w' },
         { "float",         required_argument, 0, 'f' },
         { "string",        required_argument, 0, 's' },
+        { "decode-base64", no_argument,       0, 'd' },
         { "little-endian", no_argument,       0, 'e' },
         { "big-endian",    no_argument,       0, 'E' },
         { "negate",        no_argument,       0, 'n' },
+        { "no-offset",     no_argument,       0, 'N' },
         { "text",          no_argument,       0, 't' },
         { "verbose",       no_argument,       0, 'v' },
         { "help",          no_argument,       0, 'h' },
         { 0,               0,                 0,  0  }
     };
 
-    opt                                   = getopt_long (argc, argv, "Ho:w:f:s:eEntvh",
-                                                         long_options, &option_index);
+    opt                                   = getopt_long (argc, argv,
+                                                         "Ho:w:f:s:deEnNtvh",
+                                                         long_options,
+                                                         &option_index);
 
     while (opt                           != -1)
     {
@@ -121,8 +127,13 @@ int  main (int  argc, char **argv)
 
             case 's':
                 mode                      = mode | MODE_STRING;
-                string_arg                = (char *) malloc (sizeof (char) * strlen (optarg));
+                ilen                      = sizeof (char) * (strlen (optarg) + 1);
+                string_arg                = (char *) malloc (ilen);
                 strcpy (string_arg, optarg);
+                break;
+
+            case 'd':
+                mode                      = mode | MODE_DECODE;
                 break;
 
             case 'e':
@@ -131,6 +142,10 @@ int  main (int  argc, char **argv)
 
             case 'n':
                 mode                      = mode | MODE_NEGATE;
+                break;
+
+            case 'N':
+                mode                      = mode | MODE_NOOFFSET;
                 break;
 
             case 't':
@@ -149,19 +164,24 @@ int  main (int  argc, char **argv)
                 fprintf (stdout, "  -w, --word   VALUE   process VALUE as dataword\n");
                 fprintf (stdout, "  -f, --float  VALUE   process VALUE as float\n");
                 fprintf (stdout, "  -s, --string \"VALUE\" process VALUE as string\n");
+                fprintf (stdout, "  -d, --decode-base64  perform base64 decoding\n");
                 fprintf (stdout, "  -e, --little-endian  encode as little endian\n");
                 fprintf (stdout, "  -E, --big-endian     encode as big endian\n");
                 fprintf (stdout, "  -n, --negate         negate the offset/word\n");
+                fprintf (stdout, "  -N, --no-offset      no offset with string\n");
                 fprintf (stdout, "  -t, --text           render as text\n");
                 fprintf (stdout, "  -v, --verbose        enable verbosity\n");
                 fprintf (stdout, "  -h, --help           display this help\n\n");
                 fprintf (stdout, "Verbosity will disable any binary output\n");
-                fprintf (stdout, "Text will be like verbosity without noise\n\n");
+                fprintf (stdout, "Text will be like verbosity without noise\n");
+                fprintf (stdout, "Strings by default with display an offset\n\n");
                 exit (0);
                 break;
         }
-        opt                               = getopt_long (argc, argv, "Ho:w:f:s:eEntvh",
-                                                         long_options, &option_index);
+        opt                               = getopt_long (argc, argv,
+                                                         "Ho:w:f:s:deEnNtvh",
+                                                         long_options,
+                                                         &option_index);
     }
 
     ////////////////////////////////////////////////////////////////////////////////////
@@ -219,18 +239,29 @@ int  main (int  argc, char **argv)
     //
     if (MODE_STRING                      == (mode & MODE_STRING))
     {
-        ilen                              = strlen (string_arg);
-        string                            = base64_decode (string_arg, ilen, &olen);
-        string_data                       = (char *) calloc (sizeof (char), 
-                                                             (olen + (4 - (olen % 4))));
-        strcpy (string_data, string);
+        if (MODE_DECODE                  == (mode & MODE_DECODE))
+        {
+            ilen                          = strlen (string_arg);
+            string                        = base64_decode (string_arg, ilen, &olen);
+            string_data                   = (char *) calloc (sizeof (char),
+                                                             (olen+(4-(olen%4))));
+            strcpy (string_data, string);
+        }
+        else
+        {
+            olen                          = sizeof (char) * (strlen (string_arg) + 1);
+            string_data                   = (char *) malloc (olen);
+            strcpy (string_data, string_arg);
+        }
 
         ilen                              = olen;
-
         olen                              = olen + (4 - (olen % 4));
         olen                              = olen / 4;
 
-        process_offset (mode, olen);
+        if (MODE_NOOFFSET                != (mode & MODE_NOOFFSET))
+        {
+            process_offset (mode, olen);
+        }
 
         if (MODE_VERBOSE                 == (mode & MODE_VERBOSE))
         {

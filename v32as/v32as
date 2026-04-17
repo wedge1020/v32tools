@@ -37,6 +37,7 @@ VERBOSE=$(echo "${*}" | egrep -qio '\<verbos' && echo "true" || echo "false")
 ##
 BINCODE="./bincode"
 FLOATIFY="${BINCODE} -t -f "
+NEGATE="${BINCODE} -t -n -w "
 
 ########################################################################################
 ##
@@ -436,6 +437,68 @@ function parse_param()
     done
 }
 
+function paramicate()
+{
+    reg_operand="${1}"
+    if [ ! -z "${reg_operand}" ]; then
+        regresult=$(parse_param "${reg_operand}")
+        echo "regresult: ${regresult}" 1>&2
+        p_type=$(echo "${regresult}" | cut -d':' -f1)
+        case "${p_type}" in
+
+            "index")
+                regREG=$(echo "${regresult}" | cut -d':' -f2)
+                regIMM=$(echo "${regresult}" | cut -d':' -f3)
+                regREF="true"
+                immFLG=1
+                ;;
+
+            "deref")
+                echo "DEREF:  $(echo "${regresult}" | cut -d':' -f4)" 1>&2
+                regREG=$(echo "${regresult}" | cut  -d':' -f2)
+                regREF="true"
+                regIMM=
+                if [ -z "${regREG}" ]; then
+                    regIMM=$(echo "${regresult}" | cut -d':' -f3)
+                    immFLG=1
+                fi
+                ;;
+
+            "immediate")
+                regIMM=$(echo "${regresult}" | cut -d':' -f3)
+                regREG=
+                regREF=
+                immFLG=1
+                ;;
+
+            "register")
+                regREG=$(echo "${regresult}" | cut -d':' -f2)
+                regIMM=
+                regREF=
+                immFLG=
+                ;;
+        esac
+
+        ################################################################################
+        ##
+        ## For register transactions, also determine its numeric value (SRCVAL)
+        ##
+        if [ ! -z "${regREG}" ]; then
+            regVAL=$(getregnum "${regREG}")
+        fi
+
+        ################################################################################
+        ##
+        ## Display the results
+        ##
+        echo "${regREG}:${regVAL}:${regIMM}:${regREF}:${immFLG}"
+    fi
+}
+
+########################################################################################
+##
+## obtain input
+##
 read -e line_input
 
 ########################################################################################
@@ -468,93 +531,32 @@ echo "num_operands:    ${num_operands}"
 [ ! -z "${dst_operand}" ] && echo "first_operand:   ${dst_operand}"
 [ ! -z "${src_operand}" ] && echo "second_operand:  ${src_operand}"
 
-if [ ! -z "${dst_operand}" ]; then
-    dstresult=$(parse_param "${dst_operand}")
+########################################################################################
+##
+## Paramicate the destination operand, breaking out the behavioural attributes
+##
+result=$(paramicate ${dst_operand})
+DSTREG=$(echo   "${result}" | cut -d':' -f1)
+DSTVAL=$(echo   "${result}" | cut -d':' -f2)
+DSTIMM=$(echo   "${result}" | cut -d':' -f3)
+DSTREF=$(echo   "${result}" | cut -d':' -f4)
+imm_flag=$(echo "${result}" | cut -d':' -f5)
 
-    echo "[dst] index / dstresult: ${dstresult}" 1>&2
-    p_type=$(echo "${dstresult}" | cut -d':' -f1)
-    case "${p_type}" in
-        "index")
-            DSTREG=$(echo "${dstresult}" | cut -d':' -f2)
-            DSTIMM=$(echo "${dstresult}" | cut -d':' -f3)
-            DSTREF="true"
-            imm_flag=1
-            ;;
+echo "DST result: ${result}"
 
-        "deref")
-            echo "DEREF:  $(echo "${dstresult}" | cut -d':' -f4)"
-            DSTREG=$(echo "${dstresult}" | cut  -d':' -f2)
-            DSTIMM=
-            DSTREF="true"
-            [ -z "${DSTREG}" ] && DSTIMM=$(echo "${dstresult}" | cut -d':' -f3) && imm_flag=1
-            ;;
+########################################################################################
+##
+## Paramicate the source operand, breaking out the behavioural attributes
+##
+result=$(paramicate ${src_operand})
+SRCREG=$(echo   "${result}" | cut -d':' -f1)
+SRCVAL=$(echo   "${result}" | cut -d':' -f2)
+SRCIMM=$(echo   "${result}" | cut -d':' -f3)
+SRCREF=$(echo   "${result}" | cut -d':' -f4)
+[ -z "${imm_flag}" ] && imm_flag=$(echo "${result}" | cut -d':' -f5)
+[ -z "${imm_flag}" ] && imm_flag=0
 
-        "immediate")
-            DSTIMM=$(echo "${dstresult}" | cut -d':' -f3)
-            DSTREG=
-            DSTREF=
-            imm_flag=1
-            ;;
-
-        "register")
-            DSTREG=$(echo "${dstresult}"       | cut -d':' -f2)
-            DSTIMM=
-            DSTREF=
-            ;;
-    esac
-
-    ####################################################################################
-    ##
-    ## For register transactions, also determine its numeric value (DSTVAL)
-    ##
-    if [ ! -z "${DSTREG}" ]; then
-        DSTVAL=$(getregnum "${DSTREG}")
-    fi
-fi
-
-if [ ! -z "${src_operand}" ]; then
-    srcresult=$(parse_param "${src_operand}")
-    echo "srcresult: ${srcresult}"
-    p_type=$(echo "${srcresult}" | cut -d':' -f1)
-    case "${p_type}" in
-        "index")
-            SRCREG=$(echo "${srcresult}" | cut -d':' -f2)
-            SRCIMM=$(echo "${srcresult}" | cut -d':' -f3)
-            SRCREF="true"
-            imm_flag=1
-            ;;
-
-        "deref")
-            echo "DEREF:  $(echo "${srcresult}" | cut -d':' -f4)"
-            SRCREG=$(echo "${srcresult}" | cut  -d':' -f2)
-            SRCREF="true"
-            SRCIMM=
-            [ -z "${SRCREG}" ] && SRCIMM=$(echo "${srcresult}" | cut -d':' -f3) && imm_flag=1
-            ;;
-
-        "immediate")
-            SRCIMM=$(echo "${srcresult}" | cut -d':' -f3)
-            SRCREG=
-            SRCREF=
-            imm_flag=1
-            ;;
-
-        "register")
-            SRCREG=$(echo "${srcresult}" | cut -d':' -f2)
-            SRCIMM=
-            SRCREF=
-            ;;
-    esac
-
-    ####################################################################################
-    ##
-    ## For register transactions, also determine its numeric value (SRCVAL)
-    ##
-    if [ ! -z "${SRCREG}" ]; then
-        SRCVAL=$(getregnum "${SRCREG}")
-    fi
-fi
-
+echo "SRC result: ${result}"
 ########################################################################################
 ##
 ## If MOV, determine addressing mode (ADDRMODE)
@@ -563,52 +565,58 @@ if [ "${the_opcode}" = "MOV" ]; then
     for ((index=0; index<8; index++)); do
         case ${index} in
             0) # REG, IMM
-                [ ! -z "${DSTREG}" ] && [   -z "${DSTIMM}" ] && [   -z "${DSTREF}" ] && \
-                [   -z "${SRCREG}" ] && [ ! -z "${SRCIMM}" ] && [   -z "${SRCREF}" ] && break
+                [ ! -z "${DSTREG}" ] && [   -z "${SRCREG}" ] && \
+                [   -z "${DSTIMM}" ] && [ ! -z "${SRCIMM}" ] && \
+                [   -z "${DSTREF}" ] && [   -z "${SRCREF}" ] && ADDMODE="${index}"
                 ;;
 
             1) # REG, REG
-                [ ! -z "${DSTREG}" ] && [   -z "${DSTIMM}" ] && [   -z "${DSTREF}" ] && \
-                [ ! -z "${SRCREG}" ] && [   -z "${SRCIMM}" ] && [   -z "${SRCREF}" ] && break
+                [ ! -z "${DSTREG}" ] && [ ! -z "${SRCREG}" ] && \
+                [   -z "${DSTIMM}" ] && [   -z "${SRCIMM}" ] && \
+                [   -z "${DSTREF}" ] && [   -z "${SRCREF}" ] && ADDMODE="${index}"
                 ;;
 
             2) # REG, [IMM]
-                [ ! -z "${DSTREG}" ] && [   -z "${DSTIMM}" ] && [   -z "${DSTREF}" ] && \
-                [   -z "${SRCREG}" ] && [ ! -z "${SRCIMM}" ] && [ ! -z "${SRCREF}" ] && break
+                [ ! -z "${DSTREG}" ] && [   -z "${SRCREG}" ] && \
+                [   -z "${DSTIMM}" ] && [ ! -z "${SRCIMM}" ] && \
+                [   -z "${DSTREF}" ] && [ ! -z "${SRCREF}" ] && ADDMODE="${index}"
                 ;;
 
             3) # REG, [REG]
-                [ ! -z "${DSTREG}" ] && [   -z "${DSTIMM}" ] && [   -z "${DSTREF}" ] && \
-                [ ! -z "${SRCREG}" ] && [   -z "${SRCIMM}" ] && [ ! -z "${SRCREF}" ] && break
+                [ ! -z "${DSTREG}" ] && [ ! -z "${SRCREG}" ] && \
+                [   -z "${DSTIMM}" ] && [   -z "${SRCIMM}" ] && \
+                [   -z "${DSTREF}" ] && [ ! -z "${SRCREF}" ] && ADDMODE="${index}"
                 ;;
 
             4) # REG, [REG+IMM]
-                [ ! -z "${DSTREG}" ] && [   -z "${DSTIMM}" ] && [   -z "${DSTREF}" ] && \
-                [ ! -z "${SRCREG}" ] && [ ! -z "${SRCIMM}" ] && [ ! -z "${SRCREF}" ] && break
+                [ ! -z "${DSTREG}" ] && [ ! -z "${SRCREG}" ] && \
+                [   -z "${DSTIMM}" ] && [ ! -z "${SRCIMM}" ] && \
+                [   -z "${DSTREF}" ] && [ ! -z "${SRCREF}" ] && ADDMODE="${index}"
                 ;;
 
             5) # [IMM], REG
-                [   -z "${DSTREG}" ] && [ ! -z "${DSTIMM}" ] && [ ! -z "${DSTREF}" ] && \
-                [ ! -z "${SRCREG}" ] && [   -z "${SRCIMM}" ] && [   -z "${SRCREF}" ] && break
+                [   -z "${DSTREG}" ] && [ ! -z "${SRCREG}" ] && \
+                [ ! -z "${DSTIMM}" ] && [   -z "${SRCIMM}" ] && \
+                [ ! -z "${DSTREF}" ] && [   -z "${SRCREF}" ] && ADDMODE="${index}"
                 ;;
 
             6) # [REG], REG
-                [ ! -z "${DSTREG}" ] && [   -z "${DSTIMM}" ] && [ ! -z "${DSTREF}" ] && \
-                [ ! -z "${SRCREG}" ] && [   -z "${SRCIMM}" ] && [   -z "${SRCREF}" ] && break
+                [ ! -z "${DSTREG}" ] && [ ! -z "${SRCREG}" ] && \
+                [   -z "${DSTIMM}" ] && [   -z "${SRCIMM}" ] && \
+                [ ! -z "${DSTREF}" ] && [   -z "${SRCREF}" ] && ADDMODE="${index}"
                 ;;
 
             7) # [REG+IMM], REG
-                [ ! -z "${DSTREG}" ] && [ ! -z "${DSTIMM}" ] && [ ! -z "${DSTREF}" ] && \
-                [ ! -z "${SRCREG}" ] && [   -z "${SRCIMM}" ] && [   -z "${SRCREF}" ] && break
+                [ ! -z "${DSTREG}" ] && [ ! -z "${SRCREG}" ] && \
+                [ ! -z "${DSTIMM}" ] && [   -z "${SRCIMM}" ] && \
+                [ ! -z "${DSTREF}" ] && [   -z "${SRCREF}" ] && ADDRMODE="${index}"
                 ;;
         esac
-
-        ADDRMODE="${index}"
     done
 
     echo "[${index}] dst_operand: ${dst_operand}, chk: ${chk}, src_operand: ${src_operand}, match: ${match}"
 
-    ADDRMODE=$(echo "obase=2; ${index}" | bc -q)
+    ADDRMODE=$(echo "obase=2; ${ADDMODE}" | bc -q)
     ADDRMODE=$(printf "%.3d" "${ADDRMODE}")
 else
     ADDRMODE="000"
