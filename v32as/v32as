@@ -41,12 +41,12 @@ FLOATIFY="./floatify"
 ##
 ## Establish RegEx patterns for tokens
 ##
-OPCODE='\<[A-Z][A-Z2]{1,4}\>'
+OPCODE='\<(IN|JT|JF|[A-Z][A-Z2]{2,4})\>'
 INT_TWO_OPCODE="\<JT|JF|IEQ|INE|IGT|IGE|ILT|ILE|MOV|LEA|IN|OUT|AND|OR|XOR|SHL"
 INT_TWO_OPCODE="${INT_TWO_OPCODE}|IADD|ISUB|IMUL|IDIV|IMOD|IMIN|IMAX\>"
 FLOAT_TWO_OPCODE="\<FEQ|FNE|FGT|FGE|FLT|FLE|FADD"
 FLOAT_TWO_OPCODE="${FLOAT_TWO_OPCODE}|FSUB|FMUL|FDIV|FMOD|FMIN|FMAX|ATAN2|POW\>"
-REGISTER='\<(R[0-9]|R1[0-5]|BP|SP)\>'
+REGISTER='\<(R[0-9]|R1[0-5]|BP|SP|CR|SR|DR)\>'
 HEX1='\<0[Xx][0-9A-F]{1,8}\>'
 HEX2='\<[0-9A-F]{1,8}[Hh]\>'
 OCT='\<0[0-7]+\>'
@@ -68,6 +68,7 @@ ONE_BRANCH="\<JMP|CALL\>"
 ZEROOPER="[^;]*${ZERO_OPCODE}"
 ONE_OPER="[^;]*${ONE_OPCODE} *${OPERAND}"
 TWO_OPER="[^;]*${INT_TWO_OPCODE} *${OPERAND} *, *${OPERAND}"
+
 declare -A OTYPE
 OTYPE["index"]="${INDEXED}"
 OTYPE["deref"]="${DEREF}"
@@ -192,6 +193,47 @@ opcode["LOG"]="111110"
 opcode["POW"]="111111"
 IMM_TALLY=0
 imm_flag=0
+
+########################################################################################
+##
+## getregnum(): obtain numeric value of register
+##
+function getregnum()
+{
+	REG="${1}"
+	case "${REG}" in
+		"CR")
+			VAL="1011"
+			;;
+		"SR")
+			VAL="1100"
+			;;
+		"DR")
+			VAL="1101"
+			;;
+		"BP")
+			VAL="1110"
+			;;
+		"SP")
+			VAL="1111"
+			;;
+		"IP")
+			VAL="none"
+			;;
+		"IR")
+			VAL="none"
+			;;
+		"IV")
+			VAL="none"
+			;;
+		*)
+			VAL=$(echo "${REG}" | tr -d 'A-Za-z:')
+            VAL=$(echo "obase=2; ${VAL}" | bc -q)
+            VAL=$(printf "%.4d" "${VAL}")
+			;;
+	esac
+	echo "${VAL}"
+}
 
 ########################################################################################
 ##
@@ -468,9 +510,7 @@ if [ "${num_operands}" -ge 1 ]; then
     ## For register transactions, also determine its numeric value (DSTVAL)
     ##
     if [ ! -z "${DSTREG}" ]; then
-        DSTVAL=$(echo "${DSTREG}"          | tr -d 'A-Za-z:')
-        DSTVAL=$(echo "obase=2; ${DSTVAL}" | bc -q)
-        DSTVAL=$(printf "%.4d" "${DSTVAL}")
+		DSTVAL=$(getregnum "${DSTREG}")
     fi
 fi
 
@@ -507,10 +547,8 @@ if [ "${num_operands}" -eq 2 ]; then
     ##
     ## For register transactions, also determine its numeric value (SRCVAL)
     ##
-    if [ ! -z "${DSTREG}" ]; then
-        SRCVAL=$(echo "${SRCREG}"          | tr -d 'A-Za-z:')
-        SRCVAL=$(echo "obase=2; ${SRCVAL}" | bc -q)
-        SRCVAL=$(printf "%.4d" "${SRCVAL}")
+    if [ ! -z "${SRCREG}" ]; then
+		SRCVAL=$(getregnum "${SRCREG}")
     fi
 fi
 
@@ -537,7 +575,7 @@ fi
 PORT="00000000000000"
 
 echo "----"
-echo "opcode:    ${the_opcode} (0x${opcode[${the_opcode}]})"
+echo "opcode:    \"${the_opcode}\" (0x${opcode[${the_opcode}]})"
 echo "imm_flag:  ${imm_flag}"
 IMMEDIATE=
 [ ! -z "${DSTREG}"    ] && echo "dstreg:    ${DSTREG}" || IMMEDIATE="${DSTIMM}"
@@ -564,62 +602,5 @@ if [ ! -z "${IMMEDIATE}" ]; then
 fi
 
 echo "done"
-exit
-
-## TODO: need to check for indexed first, then dereferenced, then register, then immediate
-## probably write a function to do this
-
-d_type=$(echo       "${destination}"     | egrep -o "^${REGISTER}$"  | wc -l)
-
-if [ ! "${d_type}" -eq 1 ]; then
-    d_type=$(echo   "${destination}"     | egrep -o "^${IMMEDIATE}$" | wc -l)
-    if [ ! "${d_type}" -eq 1 ]; then
-        d_type=$(echo   "${destination}" | egrep -o "^${INDEXED}$"   | wc -l)
-        if [ ! "${d_type}" -eq 1 ]; then
-            echo "indexed:"
-            echo "${destination}" | tr -d '[' | tr -d ']' | egrep -o "${REGISTER}"
-            d_type=$(echo "${destination}" | tr -d '[' | tr -d ']' | egrep -o "${REGISTER}" | wc -l)
-            if [   "${d_type}" -eq 1 ]; then
-                dest_type="dr"
-            else
-                dest_type="di"
-            fi
-        else
-            dest_type="dx"
-        fi
-    else
-        dest_type="i"
-    fi
-else
-    dest_type="r"
-fi    
-
-echo "dest_type: ${dest_type}"
-
-
-the_source=$(echo   "${line_input}"  | egrep -o "${OPERAND}"     | head -2 | tail -1)
-
-echo "the opcode:  ${the_opcode}"
-
-if [ "${num_operands}" -eq 0 ]; then
-    num_operands=$(echo    "${line_input}" | egrep -o "${ONE_OPER}" | wc -l)
-    if [ "${num_operands}" -eq 0 ]; then
-        num_operands=$(echo    "${line_input}" | egrep -o "${ZEROOPER}" | wc -l)
-        if [ "${num_operands}" -eq 0 ]; then
-            echo "invalid instruction"
-            exit 1
-        else
-            num_operands="0"
-        fi
-    else
-        num_operands="1"
-        echo "destination: ${destination}"
-    fi
-else
-    num_operands="2"
-    echo "destination: ${destination}"
-    echo "the source:  ${the_source}"
-fi
-echo "opcode type: ${num_operands} operand instruction"
 
 exit 0
