@@ -18,14 +18,14 @@
 ### 
 ########################################################################################
 
-##############################################################################
+########################################################################################
 ##
 ## Process command-line arguments
 ##
 DO_HELP=$(echo "${*}" | egrep -qio '\<help\>' && echo "true" || echo "false")
 VERBOSE=$(echo "${*}" | egrep -qio '\<verbos' && echo "true" || echo "false")
 
-##############################################################################
+########################################################################################
 ##
 ## Display usage information if requested (and exit)
 ##
@@ -35,7 +35,7 @@ VERBOSE=$(echo "${*}" | egrep -qio '\<verbos' && echo "true" || echo "false")
 ##
 ## Declare and initialize variables
 ##
-BINCODE="./bincode"
+BINCODE=$(whereis -b bincode | cut -d' ' -f2)
 FLOATIFY="${BINCODE} -t -f "
 NEGATE="${BINCODE} -t -n -w "
 
@@ -48,16 +48,16 @@ INT_TWO_OPCODE="^(JT|JF|IEQ|INE|IGT|IGE|ILT|ILE|MOV|LEA|IN|OUT|AND|OR|XOR|SHL"
 INT_TWO_OPCODE="${INT_TWO_OPCODE}|IADD|ISUB|IMUL|IDIV|IMOD|IMIN|IMAX)$"
 FLOAT_TWO_OPCODE="^(FEQ|FNE|FGT|FGE|FLT|FLE|FADD"
 FLOAT_TWO_OPCODE="${FLOAT_TWO_OPCODE}|FSUB|FMUL|FDIV|FMOD|FMIN|FMAX|ATAN2|POW)$"
-REGISTER='^(R[0-9]|R1[0-5]|BP|SP|CR|SR|DR)$'
-HEX1='^0[Xx][0-9A-F]{1,8}$'
-HEX2='^[0-9A-F]{1,8}[Hh]$'
-OCT='^0[0-7]+$'
-BIN='^0[Bb][01]{1,32}$'
-DEC1='^[+-]?([0-9]|[1-9][0-9]*)$'
-DEC2='^#[+-]?([0-9]|[1-9][0-9]*)$'
+REGISTER='(R[0-9]|R1[0-5]|BP|SP|CR|SR|DR)'
+HEX1='0[Xx][0-9A-F]{1,8}'
+HEX2='[0-9A-F]{1,8}[Hh]'
+OCT='0[0-7]+'
+BIN='0[Bb][01]{1,32}'
+DEC1='[+-]?([0-9]|[1-9][0-9]*)'
+DEC2='#[+-]?([0-9]|[1-9][0-9]*)'
 # word boundaries not catching any signed values
 # echo "MOV R5, +0" | tr ' ' '\n' | tr -s ' ' | egrep -o '^[-+]?([1-9]|[1-9][0-9]*)|[+]?0$'
-FLOAT='^[+-]?([0-9]\.[0-9][0-9]*|[1-9][0-9]*\.[0-9][0-9]*)$'
+FLOAT='[+-]?([0-9]\.[0-9][0-9]*|[1-9][0-9]*\.[0-9][0-9]*)'
 IMMEDIATE="(${BIN}|${OCT}|${DEC1}|${DEC2}|${FLOAT}|${HEX1}|${HEX2})"
 INDEX="[-+]"
 INDEXED="${REGISTER}[-+]${IMMEDIATE}"
@@ -74,19 +74,19 @@ ONE_OPER="[^;]*${ONE_OPCODE} *${OPERAND}"
 TWO_OPER="[^;]*${INT_TWO_OPCODE} *${OPERAND} *, *${OPERAND}"
 
 declare -A OTYPE
-OTYPE["index"]="${INDEXED}"
-OTYPE["deref"]="${DEREF}"
-OTYPE["register"]="${REGISTER}"
-OTYPE["immediate"]="${IMMEDIATE}"
+OTYPE["index"]="^${INDEXED}$"
+OTYPE["deref"]="^${DEREF}$"
+OTYPE["register"]="^${REGISTER}$"
+OTYPE["immediate"]="^${IMMEDIATE}$"
 
 declare -A ITYPE
-ITYPE["hex1"]="${HEX1}"
-ITYPE["hex2"]="${HEX2}"
-ITYPE["oct"]="${OCT}"
-ITYPE["bin"]="${BIN}"
-ITYPE["dec"]="${DEC1}"
-ITYPE["dec2"]="${DEC2}"
-ITYPE["float"]="${FLOAT}"
+ITYPE["hex1"]="^${HEX1}$"
+ITYPE["hex2"]="^${HEX2}$"
+ITYPE["oct"]="^${OCT}$"
+ITYPE["bin"]="^${BIN}$"
+ITYPE["dec"]="^${DEC1}$"
+ITYPE["dec2"]="^${DEC2}$"
+ITYPE["float"]="^${FLOAT}$"
 
 declare -a ONE_BRANCH
 ONE_BRANCH[0]="${IMMEDIATE}"
@@ -272,54 +272,54 @@ function parse_imm()
 
         case "${attr}" in
             "bin")
-                d_imm=$(echo "${token}" | egrep -o "${BIN}" | tr -d 'B' | tr -d 'b')
-                t_imm=$(echo "${token}" | egrep -o "${BIN}" | wc -l)
+                d_imm=$(echo "${token}" | egrep -o "^${BIN}$" | tr -d 'B' | tr -d 'b')
+                t_imm=$(echo "${token}" | egrep -o "^${BIN}$" | wc -l)
                 d_imm=$(echo "obase=16; ibase=2; ${d_imm}"  | bc)
                 ;;
 
             "oct")
-                d_imm=$(echo "${token}" | egrep -o "${OCT}")
-                t_imm=$(echo "${token}" | egrep -o "${OCT}" | wc -l)
+                d_imm=$(echo "${token}" | egrep -o "^${OCT}$")
+                t_imm=$(echo "${token}" | egrep -o "^${OCT}$" | wc -l)
                 d_imm=$(echo "obase=16; ibase=8; ${d_imm}"  | bc)
                 ;;
 
             "dec1")
-                d_imm=$(echo "${token}" | egrep -o "${DEC1}" | tr -d '+')
+                d_imm=$(echo "${token}" | egrep -o "^${DEC1}$" | tr -d '+')
                 d_chk=$(echo "${d_imm}" | egrep -qio '^-' && echo "true" || echo "false")
                 if [ "${d_chk}" = "true" ]; then
                     d_imm=$(echo "${token}"                  | tr -d '-')
                     d_imm=$(echo "obase=2; (2^32)-${d_imm}"  | bc)
                     d_imm=$(echo "ibase=2; ${d_imm}"         | bc)
                 fi
-                t_imm=$(echo "${token}" | egrep -o "${DEC1}" | wc -l)
+                t_imm=$(echo "${token}" | egrep -o "^${DEC1}$" | wc -l)
                 d_imm=$(echo "obase=16; ibase=10; ${d_imm}"  | bc)
                 ;;
 
             "dec2")
-                d_imm=$(echo "${token}" | egrep -o "${DEC2}" | tr -d '#' | tr -d '+')
+                d_imm=$(echo "${token}" | egrep -o "^${DEC2}$" | tr -d '#' | tr -d '+')
                 d_chk=$(echo "${d_imm}" | egrep -qio '^-' && echo "true" || echo "false")
                 if [ "${d_chk}" = "true" ]; then
                     d_imm=$(echo "${d_imm}"                  | tr -d '-')
                     d_imm=$(echo "obase=2; (2^32)-${d_imm}"  | bc)
                     d_imm=$(echo "ibase=2; ${d_imm}"         | bc)
                 fi
-                t_imm=$(echo "${token}" | egrep -o "${DEC2}" | wc -l)
+                t_imm=$(echo "${token}" | egrep -o "^${DEC2}$" | wc -l)
                 d_imm=$(echo "obase=16; ibase=10; ${d_imm}"  | bc)
                 ;;
 
             "hex1")
-                d_imm=$(echo "${token}" | egrep -o "${HEX1}" | tr -d 'X' | tr -d 'x')
-                t_imm=$(echo "${token}" | egrep -o "${HEX1}" | wc -l)
+                d_imm=$(echo "${token}" | egrep -o "^${HEX1}$" | tr -d 'X' | tr -d 'x')
+                t_imm=$(echo "${token}" | egrep -o "^${HEX1}$" | wc -l)
                 ;;
 
             "hex2")
-                d_imm=$(echo "${token}" | egrep -o "${HEX2}" | tr -d 'H' | tr -d 'h')
-                t_imm=$(echo "${token}" | egrep -o "${HEX2}" | wc -l)
+                d_imm=$(echo "${token}" | egrep -o "^${HEX2}$" | tr -d 'H' | tr -d 'h')
+                t_imm=$(echo "${token}" | egrep -o "^${HEX2}$" | wc -l)
                 ;;
 
             "float")
-                d_imm=$(echo "${token}" | egrep -o "${FLOAT}")
-                t_imm=$(echo "${token}" | egrep -o "${FLOAT}" | wc -l)
+                d_imm=$(echo "${token}" | egrep -o "^${FLOAT}$")
+                t_imm=$(echo "${token}" | egrep -o "^${FLOAT}$" | wc -l)
                 if [ "${t_imm}" -gt 0 ]; then
                     d_imm=$(${FLOATIFY} "${token}" | tr -d 'x')
                 fi
@@ -332,9 +332,6 @@ function parse_imm()
     if [ ! -z "${d_imm}" ]; then
         d_imm="0x${d_imm}"
         d_imm=$(printf "0x%.8X" "${d_imm}")
-        #echo "attr:  ${attr}"  1>&2
-        #echo "d_imm: ${d_imm}" 1>&2
-        #echo "t_imm: ${t_imm}" 1>&2
     fi
     echo "${d_imm}"
 }
@@ -362,137 +359,67 @@ function parse_operator()
 
 function parse_param()
 {
-    token="${1}"
-    i_data=
-    o_data=
-    r_data=
-    for attr in index deref register immediate; do
-        p_data=$(echo "${token}"  | egrep -o "${OTYPE[${attr}]}")
-        p_type=$(echo "${token}"  | egrep -o "${OTYPE[${attr}]}" | wc -l)
+    operand="${1}"
+    pFLG=0
 
-        echo "[parse_param] token:  ${token}"  1>&2
-        echo "[parse_param] p_data: ${p_data}" 1>&2
-        echo "[parse_param] p_type: ${p_type}" 1>&2
-
-        if [ "${p_type}" -eq 1 ]; then
-            case "${attr}" in
-                "index")
-                    token=$(echo  "${token}" | tr -d '[' | tr -d ']')
-                    o_data=$(echo "${token}" | egrep -o "${INDEX}")
-                    echo "o_data: ${o_data}" 1>&2
-                    reg_t=$(echo  "${token}" | cut -d"${o_data}" -f1)
-                    r_data=$(parse_reg "${reg_t}")
-                    imm_t=$(echo  "${token}" | cut -d"${o_data}" -f2)
-                    i_data=$(parse_imm "${imm_t}")
-                    if [ -z "${r_data}" ]; then
-                        reg_t=$(echo  "${token}" | cut -d"${o_data}" -f2)
-                        r_data=$(parse_reg "${reg_t}")
-                        imm_t=$(echo  "${token}" | cut -d"${o_data}" -f1)
-                        i_data=$(parse_imm "${imm_t}")
-                        if [ ! "${o_data}" = "+" ]; then # subtraction
-                            echo "ERROR: malformed operand (R#+Imm)"
-                            exit 2
-                        fi
-                    fi
-
-                    if [ ! "${o_data}" = "+" ]; then # subtraction
-                        o_data="+"
-                        i_data=$(echo "(2^32)-${i_data}" | bc -q)
-                    fi
-
-                    x_data="[${r_data}+${i_data}]"
-
-                    if [ -z "${r_data}" ]; then
-                        echo "ERROR: malformed operand (no register found)!"
-                        exit 2
-                    fi
-
-                    if [ -z "${i_data}" ]; then
-                        echo "ERROR: malformed operand (no immediate value found)!"
-                        exit 2
-                    fi
-                    ;;
-
-                "deref")
-                    d_data="${token}"
-                    token=$(echo       "${token}" | tr -d '[' | tr -d ']')
-                    r_data=$(parse_reg "${token}")
-                    i_data=$(parse_imm "${token}")
-                    [ ! -z "${r_data}" ] && d_data="[${r_data}]"
-                    [ ! -z "${i_data}" ] && d_data="[${i_data}]"
-                    ;;
-
-                "register")
-                    r_data=$(parse_reg "${token}")
-                    ;;
-
-                "immediate")
-                    i_data=$(parse_imm "${token}")
-                    ;;
-            esac
-
-            echo "${attr}:${r_data}:${i_data}:${d_data}:${x_data}"
-            break
-        fi
-    done
-}
-
-function paramicate()
-{
-    reg_operand="${1}"
-    if [ ! -z "${reg_operand}" ]; then
-        regresult=$(parse_param "${reg_operand}")
-        echo "regresult: ${regresult}" 1>&2
-        p_type=$(echo "${regresult}" | cut -d':' -f1)
-        case "${p_type}" in
-
-            "index")
-                regREG=$(echo "${regresult}" | cut -d':' -f2)
-                regIMM=$(echo "${regresult}" | cut -d':' -f3)
-                regREF="true"
-                immFLG=1
-                ;;
-
-            "deref")
-                echo "DEREF:  $(echo "${regresult}" | cut -d':' -f4)" 1>&2
-                regREG=$(echo "${regresult}" | cut  -d':' -f2)
-                regREF="true"
-                regIMM=
-                if [ -z "${regREG}" ]; then
-                    regIMM=$(echo "${regresult}" | cut -d':' -f3)
-                    immFLG=1
-                fi
-                ;;
-
-            "immediate")
-                regIMM=$(echo "${regresult}" | cut -d':' -f3)
-                regREG=
-                regREF=
-                immFLG=1
-                ;;
-
-            "register")
-                regREG=$(echo "${regresult}" | cut -d':' -f2)
-                regIMM=
-                regREF=
-                immFLG=
-                ;;
-        esac
+    if [ ! -z "${operand}" ]; then
+        echo "operand: ${operand}" 1>&2
 
         ################################################################################
         ##
-        ## For register transactions, also determine its numeric value (SRCVAL)
+        ## check for a dereferenced parameter, mark it and then update the
+        ## parameter string for further processing
         ##
-        if [ ! -z "${regREG}" ]; then
-            regVAL=$(getregnum "${regREG}")
+        chk=$(echo "${operand}" | egrep -o "^${DEREF}$"   | wc -l)
+        if [ "${chk}" -eq 1 ]; then
+            pREF="true"
+            operand=$(echo "${operand}" | tr -d '[' | tr -d ']')
         fi
 
         ################################################################################
         ##
-        ## Display the results
+        ## check for register parameter
         ##
-        echo "${regREG}:${regVAL}:${regIMM}:${regREF}:${immFLG}"
+        pREG=$(parse_reg "${operand}")
+
+        ################################################################################
+        ##
+        ## check for immediate parameter
+        ##
+        pIMM=$(parse_imm "${operand}")
+        [ ! -z "${pIMM}" ] && pFLG=1
+
+        ################################################################################
+        ##
+        ## check for an indexed parameter, split it and identify each of
+        ## the components
+        ##
+        chk=$(echo       "${operand}" | egrep -o "^${INDEXED}$" | wc -l)
+        if [ "${chk}" -eq 1 ]; then
+            delim=$(echo "${operand}" | grep -o '[+]')
+            [ -z "${delim}" ] && delim=$(echo "${operand}" | grep -o '[-]')
+            left=$(echo  "${operand}" | cut -d"${delim}" -f1)
+            right=$(echo "${operand}" | cut -d"${delim}" -f2)
+            pREG=$(parse_reg "${left}")
+            pIMM=$(parse_imm "${right}")
+            pFLG=1
+            [ "${delim}" = "-" ] && pIMM=$(${NEGATE} ${pIMM})
+        fi
     fi
+        
+    ################################################################################
+    ##
+    ## For register transactions, also determine its numeric value (SRCVAL)
+    ##
+    if [ ! -z "${pREG}" ]; then
+        pVAL=$(getregnum "${pREG}")
+    fi
+
+    ################################################################################
+    ##
+    ## Display the results
+    ##
+    echo "${pREG}:${pVAL}:${pIMM}:${pREF}:${pFLG}"
 }
 
 ########################################################################################
@@ -535,28 +462,41 @@ echo "num_operands:    ${num_operands}"
 ##
 ## Paramicate the destination operand, breaking out the behavioural attributes
 ##
-result=$(paramicate ${dst_operand})
-DSTREG=$(echo   "${result}" | cut -d':' -f1)
-DSTVAL=$(echo   "${result}" | cut -d':' -f2)
-DSTIMM=$(echo   "${result}" | cut -d':' -f3)
-DSTREF=$(echo   "${result}" | cut -d':' -f4)
-imm_flag=$(echo "${result}" | cut -d':' -f5)
-
-echo "DST result: ${result}"
+result=$(parse_param ${dst_operand})
+DSTREG=$(echo "${result}" | cut -d':' -f1)
+DSTVAL=$(echo "${result}" | cut -d':' -f2)
+DSTIMM=$(echo "${result}" | cut -d':' -f3)
+DSTREF=$(echo "${result}" | cut -d':' -f4)
+DSTFLG=$(echo "${result}" | cut -d':' -f5)
 
 ########################################################################################
 ##
 ## Paramicate the source operand, breaking out the behavioural attributes
 ##
-result=$(paramicate ${src_operand})
-SRCREG=$(echo   "${result}" | cut -d':' -f1)
-SRCVAL=$(echo   "${result}" | cut -d':' -f2)
-SRCIMM=$(echo   "${result}" | cut -d':' -f3)
-SRCREF=$(echo   "${result}" | cut -d':' -f4)
-[ -z "${imm_flag}" ] && imm_flag=$(echo "${result}" | cut -d':' -f5)
-[ -z "${imm_flag}" ] && imm_flag=0
+result=$(parse_param ${src_operand})
+SRCREG=$(echo "${result}" | cut -d':' -f1)
+SRCVAL=$(echo "${result}" | cut -d':' -f2)
+SRCIMM=$(echo "${result}" | cut -d':' -f3)
+SRCREF=$(echo "${result}" | cut -d':' -f4)
+SRCFLG=$(echo "${result}" | cut -d':' -f5)
 
-echo "SRC result: ${result}"
+########################################################################################
+##
+## Error check: at most, only one immediate flag can be set across both the
+## parameters
+##
+if [ "${DSTFLG}" -eq 1 ] && [ "${SRCFLG}" -eq 1 ]; then
+	echo "ERROR: illegal multiple immediate operands"
+	exit 7
+fi
+
+########################################################################################
+##
+## Set imm_flag if set on either parameter
+##
+[ "${DSTFLG}" -eq 1 ] && imm_flag="${DSTFLG}"
+[ "${SRCFLG}" -eq 1 ] && imm_flag="${SRCFLG}"
+
 ########################################################################################
 ##
 ## If MOV, determine addressing mode (ADDRMODE)
@@ -625,7 +565,7 @@ fi
 PORT="00000000000000"
 
 echo "----"
-echo "opcode:    \"${the_opcode}\" (0x${opcode[${the_opcode}]})"
+echo "opcode:    \"${the_opcode}\" (${opcode[${the_opcode}]})"
 echo "imm_flag:  ${imm_flag}"
 IMMEDIATE=
 [ ! -z "${DSTREG}"    ] || IMMEDIATE="${DSTIMM}"
