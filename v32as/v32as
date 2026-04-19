@@ -7,6 +7,8 @@
 ### 
 ###            option - description
 ### =================   ===================================================
+###              bios   assemble for BIOS
+###              cart   assemble for CART (default)
 ###  outfile=FILE.OBJ   specify output OBJ file
 ###           verbose   increase verbosity
 ###              help   display usage information and exit
@@ -22,8 +24,10 @@
 ##
 ## Process command-line arguments
 ##
-DO_HELP=$(echo "${*}" | egrep -qio '\<help\>' && echo "true" || echo "false")
-VERBOSE=$(echo "${*}" | egrep -qio '\<verbos' && echo "true" || echo "false")
+DO_HELP=$(echo "${*}" | egrep -qio '\<help\>' && echo "true"  || echo "false")
+VERBOSE=$(echo "${*}" | egrep -qio '\<verbos' && echo "true"  || echo "false")
+DO_BIOS=$(echo "${*}" | egrep -qio '\<bios\>' && echo "true"  || echo "false")
+DO_CART=$(echo "${*}" | egrep -qio '\<bios\>' && echo "false" || echo "true")
 
 ########################################################################################
 ##
@@ -629,6 +633,13 @@ function do_error()
 
 ########################################################################################
 ##
+## start of assembler logic
+##
+[ "${DO_BIOS}" = "true" ] && offset=0x10000000 && echo "[v32as] assembling for BIOS"
+[ "${DO_CART}" = "true" ] && offset=0x20000000 && echo "[v32as] assembling for CART"
+
+########################################################################################
+##
 ## obtain input
 ##
 read -e line_input
@@ -748,7 +759,7 @@ echo "======================================="
 if [ ! -z "${dst_operand_types}" ]; then
     result=$(parse_param ${dst_operand} "${dst_operand_types}" "${dst_operand_flags}")
     if [ "${result}" = "::::0:" ]; then
-        do_error ${the_opcode} ${dst_operand} ${src_operand} syntax
+        do_error ${offset} ${the_opcode} ${dst_operand} ${src_operand} syntax
     fi
     DSTREG=$(echo "${result}" | cut -d':' -f1)
     DSTVAL=$(echo "${result}" | cut -d':' -f2)
@@ -765,7 +776,7 @@ fi
 if [ ! -z "${src_operand_types}" ]; then
     result=$(parse_param ${src_operand} "${src_operand_types}" "${src_operand_flags}")
     if [ "${result}" = "::::0:" ]; then
-        do_error ${the_opcode} ${dst_operand} ${src_operand} syntax
+        do_error ${offset} ${the_opcode} ${dst_operand} ${src_operand} syntax
     fi
     SRCREG=$(echo "${result}" | cut -d':' -f1)
     SRCVAL=$(echo "${result}" | cut -d':' -f2)
@@ -782,7 +793,7 @@ fi
 ##
 if [ "${DSTFLG}" -eq 1 ] && \
    [ "${SRCFLG}" -eq 1 ]; then
-    do_error ${the_opcode} ${dst_operand} ${src_operand} syntax
+    do_error ${offset} ${the_opcode} ${dst_operand} ${src_operand} syntax
     #echo "ERROR: illegal multiple immediate operands"
 fi
 
