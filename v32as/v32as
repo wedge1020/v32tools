@@ -55,17 +55,18 @@ OCT='0[0-7]+'
 BIN='0[Bb][01]{1,32}'
 DEC1='[+-]?([0-9]|[1-9][0-9]*)'
 DEC2='#[+-]?([0-9]|[1-9][0-9]*)'
-# word boundaries not catching any signed values
-# echo "MOV R5, +0" | tr ' ' '\n' | tr -s ' ' | egrep -o '^[-+]?([1-9]|[1-9][0-9]*)|[+]?0$'
 FLOAT='[+-]?([0-9]\.[0-9][0-9]*|[1-9][0-9]*\.[0-9][0-9]*)'
 IMMEDIATE="(${BIN}|${OCT}|${DEC1}|${DEC2}|${FLOAT}|${HEX1}|${HEX2})"
 INDEX="[-+]"
 INDEXED="${REGISTER}[-+]${IMMEDIATE}"
-#DEREF="[[](${REGISTER}|${IMMEDIATE}|${INDEXED})[]]"
 DEREF='[[].*[]]'
-IOPORT='(TIM|RNG|GPU|SPU|INP|CAR|MEM)_[A-Z][A-Za-z]*|0[Xx][0-9A-F]{3}'
-OPERAND="(${DEREF}|${REGISTER}|${IMMEDIATE})"
-#OPERAND="[[]?(${REGISTER}|${IMMEDIATE}|${REGISTER}${INDEXED}${IMMEDIATE})[]]?"
+IOPORTSYM='(TIM|RNG|GPU|SPU|INP|CAR|MEM)_[A-Z][A-Za-z]*'
+IOPORTHEX='0[Xx][0-6][01][0-9A-F]'
+GPUCMDSYM='GPU(Command|BlendingMode)_[A-Z][A-Za-z]*'
+SNDCMDSYM='SPU(Command|ChannelState)_[A-Z][A-Za-z]*'
+IOPORTCMDHEX='0[Xx][1-4][0-5]'
+IOPORT="${IOPORTSYM}|${IOPORTHEX}"
+OPERAND="(${DEREF}|${REGISTER}|${IMMEDIATE}|${IOPORT})"
 ZERO_OPCODE='^(HLT|WAIT|RET|MOVS|SETS)$'
 ONE_OPCODE="^(JMP|CALL|PUSH|POP|CMPS|CIF|CFI|CIB|CFB|NOT|BNOT|ISGN|IABS|FSGN|FABS"
 ONE_OPCODE="${ONE_OPCODE}|FLR|CEIL|ROUND|SIN|ACOS|LOG)$"
@@ -196,6 +197,83 @@ opcode["ACOS"]="111100"
 opcode["ATAN2"]="111101"
 opcode["LOG"]="111110"
 opcode["POW"]="111111"
+
+declare -A IOPORT
+IOPORT["TIM_CurrentDate"]="0x000"
+IOPORT["TIM_CurrentTime"]="0x001"
+IOPORT["TIM_FrameCounter"]="0x002"
+IOPORT["TIM_CycleCounter"]="0x003"
+IOPORT["RNG_CurrentValue"]="0x100"
+IOPORT["GPU_Command"]="0x200"
+IOPORT["GPU_RemainingPixels"]="0x201"
+IOPORT["GPU_ClearColor"]="0x202"
+IOPORT["GPU_MultiplyColor"]="0x203"
+IOPORT["GPU_ActiveBlending"]="0x204"
+IOPORT["GPU_SelectedTexture"]="0x205"
+IOPORT["GPU_SelectedRegion"]="0x206"
+IOPORT["GPU_DrawingPointX"]="0x207"
+IOPORT["GPU_DrawingPointY"]="0x208"
+IOPORT["GPU_DrawingScaleX"]="0x209"
+IOPORT["GPU_DrawingScaleY"]="0x20A"
+IOPORT["GPU_DrawingAngle"]="0x20B"
+IOPORT["GPU_RegionMinX"]="0x20C"
+IOPORT["GPU_RegionMinY"]="0x20D"
+IOPORT["GPU_RegionMaxX"]="0x20E"
+IOPORT["GPU_RegionMaxY"]="0x20F"
+IOPORT["GPU_RegionHotspotX"]="0x210"
+IOPORT["GPU_RegionHotspotY"]="0x211"
+IOPORT["SPU_Command"]="0x300"
+IOPORT["SPU_GlobalVolume"]="0x301"
+IOPORT["SPU_SelectedSound"]="0x302"
+IOPORT["SPU_SelectedChannel"]="0x303"
+IOPORT["SPU_SoundLength"]="0x304"
+IOPORT["SPU_SoundPlayWithLoop"]="0x305"
+IOPORT["SPU_SoundLoopStart"]="0x306"
+IOPORT["SPU_SoundLoopEnd"]="0x307"
+IOPORT["SPU_ChannelState"]="0x308"
+IOPORT["SPU_ChannelAssignedSound"]="0x309"
+IOPORT["SPU_ChannelVolume"]="0x30A"
+IOPORT["SPU_ChannelSpeed"]="0x30B"
+IOPORT["SPU_ChannelLoopEnabled"]="0x30C"
+IOPORT["SPU_ChannelPosition"]="0x30D"
+IOPORT["INP_SelectedGamepad"]="0x400"
+IOPORT["INP_GamepadConnected"]="0x401"
+IOPORT["INP_GamepadLeft"]="0x402"
+IOPORT["INP_GamepadRight"]="0x403"
+IOPORT["INP_GamepadUp"]="0x404"
+IOPORT["INP_GamepadDown"]="0x405"
+IOPORT["INP_GamepadButtonStart"]="0x406"
+IOPORT["INP_GamepadButtonA"]="0x407"
+IOPORT["INP_GamepadButtonB"]="0x408"
+IOPORT["INP_GamepadButtonX"]="0x409"
+IOPORT["INP_GamepadButtonY"]="0x40A"
+IOPORT["INP_GamepadButtonL"]="0x40B"
+IOPORT["INP_GamepadButtonR"]="0x40C"
+IOPORT["CAR_Connected"]="0x500"
+IOPORT["CAR_ProgramROMSize"]="0x501"
+IOPORT["CAR_NumberOfTextures"]="0x502"
+IOPORT["CAR_NumberOfSounds"]="0x503"
+IOPORT["MEM_Connected"]="0x600"
+
+declare -A IOPORTCMD
+IOPORTCMD["GPUCommand_ClearScreen"]="0x10"
+IOPORTCMD["GPUCommand_DrawRegion"]="0x11"
+IOPORTCMD["GPUCommand_DrawRegionZoomed"]="0x12"
+IOPORTCMD["GPUCommand_DrawRegionRotated"]="0x13"
+IOPORTCMD["GPUCommand_DrawRegionRotozoomed"]="0x14"
+IOPORTCMD["GPUBlendingMode_Alpha"]="0x20"
+IOPORTCMD["GPUBlendingMode_Add"]="0x21"
+IOPORTCMD["GPUBlendingMode_Subtract"]="0x22"
+IOPORTCMD["SPUCommand_PlaySelectedChannel"]="0x30"
+IOPORTCMD["SPUCommand_PauseSelectedChannel"]="0x31"
+IOPORTCMD["SPUCommand_StopSelectedChannel"]="0x32"
+IOPORTCMD["SPUCommand_PauseAllChannels"]="0x33"
+IOPORTCMD["SPUCommand_ResumeAllChannels"]="0x34"
+IOPORTCMD["SPUCommand_StopAllChannels"]="0x35"
+IOPORTCMD["SPUChannelState_Stopped"]="0x40"
+IOPORTCMD["SPUChannelState_Paused"]="0x41"
+IOPORTCMD["SPUChannelState_Playing"]="0x42"
+
 imm_flag=0
 
 ########################################################################################
@@ -237,6 +315,32 @@ function getregnum()
             ;;
     esac
     echo "${VAL}"
+}
+
+########################################################################################
+##
+## getportnum(): obtain numeric value of IOPort
+##
+function getportnum()
+{
+    portname="${1}"
+
+    IOP="${IOPORT[${portname}]}"
+
+    echo "${IOP}"
+}
+
+########################################################################################
+##
+## getportcmdnum(): obtain numeric value of IOPort Command
+##
+function getportcmdnum()
+{
+    cmdname="${1}"
+
+    CMD="${IOPORTCMD[${cmdname}]}"
+
+    echo "${CMD}"
 }
 
 ########################################################################################
@@ -369,6 +473,30 @@ function parse_operator()
 
 ########################################################################################
 ##
+## parse_iop(): function to parse and return the hex address of the  provided
+##              V32 IOPort
+##
+function parse_iop()
+{
+    portname="${1}"
+    portnum=
+    portchk=$(echo "${portname}" | egrep -o "^${IOPORTSYM}$")
+    numchk=
+
+    [ ! -z "${portchk}" ] && portnum="${IOPORT[${portname}]}"
+    [   -z "${portchk}" ] && numchk=$(echo "${portname}" | egrep -o "^${IOPORTHEX}$")
+    [ ! -z "${numchk}"  ] && portnum="${portname}"
+    #[   -z "${portnum}" ] && portnum="${IOPORTCMD[${portname}]}"
+    #[   -z "${portnum}" ] && portnum=$(echo "${portname}" | egrep -o "${IOPORTCMDHEX}$")
+
+    echo "[parse_iop] portname: ${portname}" 1>&2
+    echo "[parse_iop] portnum:  ${portnum}"  1>&2
+
+    echo "${portnum}"
+}
+
+########################################################################################
+##
 ## parse_param(): general operand processing; figure out what it is and obtain
 ##                useful, pertinent data that is returned
 ##
@@ -378,11 +506,11 @@ function parse_param()
     categories="${2}"
     flags="${3}"
     pFLG=0
-	pREF=
+    pREF=
 
-	echo "[parse_param] operand:    ${operand}"    1>&2
-	echo "[parse_param] categories: ${categories}" 1>&2
-	echo "[parse_param] flags:      ${flags}"      1>&2
+    echo "[parse_param] operand:    ${operand}"    1>&2
+    echo "[parse_param] categories: ${categories}" 1>&2
+    echo "[parse_param] flags:      ${flags}"      1>&2
 
     ####################################################################################
     ##
@@ -390,7 +518,7 @@ function parse_param()
     ## parameter string for further processing
     ##
     if [ ! -z "${flags}" ] && [ "${flags}" = "deref" ]; then
-		echo "dereferencing: allowed" 1>&2
+        echo "dereferencing: allowed" 1>&2
         chk=$(echo "${operand}" | egrep -o "^${DEREF}$"   | wc -l)
         if [ "${chk}" -eq 1 ]; then
             pREF="true"
@@ -422,7 +550,7 @@ function parse_param()
             ##
             "register")
                 pREG=$(parse_reg "${operand}")
-				[ ! -z "${pREG}" ] && break
+                [ ! -z "${pREG}" ] && break
                 ;;
 
             ############################################################################
@@ -442,7 +570,7 @@ function parse_param()
                     pIMM=$(parse_imm "${right}")
                     pFLG=1
                     [ "${delim}" = "-" ] && pIMM=$(${NEGATE} ${pIMM})
-					break
+                    break
                 fi
                 ;;
 
@@ -451,7 +579,7 @@ function parse_param()
             ## check for IOPort parameter (symbolic or hex numeric)
             ##
             "ioport")
-                pREG=$(parse_iop "${operand}")
+                pIOP=$(parse_iop "${operand}")
                 ;;
         esac
     done
@@ -482,7 +610,7 @@ read -e line_input
 ##
 ## polish line_input to ensure consistent presentation
 ##
-line_input=$(echo  "${line_input}" | tr '[:lower:]' '[:upper:]' | tr -s ' ')
+line_input=$(echo  "${line_input}" | tr -s ' ')
 line_input=$(echo  "${line_input}" | sed 's/ ,/,/g')  # remove any space before comma
 line_input=$(echo  "${line_input}" | sed 's/;.*$//g') # remove comments
 
@@ -578,6 +706,13 @@ esac
 DSTFLG=0
 SRCFLG=0
 
+echo "======================================="
+echo "the_opcode:        ${the_opcode}"
+echo "dst_operand:       ${dst_operand}"
+echo "dst_operand_types: ${dst_operand_types}"
+echo "dst_operand_flags: ${dst_operand_flags}"
+echo "======================================="
+
 ########################################################################################
 ##
 ## If available, process the destination operand
@@ -589,6 +724,7 @@ if [ ! -z "${dst_operand_types}" ]; then
     DSTIMM=$(echo "${result}" | cut -d':' -f3)
     DSTREF=$(echo "${result}" | cut -d':' -f4)
     DSTFLG=$(echo "${result}" | cut -d':' -f5)
+    DSTPRT=$(echo "${result}" | cut -d':' -f6)
 fi
 
 ########################################################################################
@@ -602,6 +738,7 @@ if [ ! -z "${src_operand_types}" ]; then
     SRCIMM=$(echo "${result}" | cut -d':' -f3)
     SRCREF=$(echo "${result}" | cut -d':' -f4)
     SRCFLG=$(echo "${result}" | cut -d':' -f5)
+    SRCPRT=$(echo "${result}" | cut -d':' -f6)
 fi
 
 ########################################################################################
@@ -690,7 +827,15 @@ else
     ADDRMODE="000"
 fi
 
-PORT="00000000000000"
+########################################################################################
+##
+## Set PORT if set on either parameter
+##
+[ ! -z "${DSTPRT}" ] && PORT=$(echo "obase=2; ibase=16; ${DSTPRT}" | tr -d 'x' | bc)
+[ ! -z "${SRCPRT}" ] && PORT=$(echo "obase=2; ibase=16; ${SRCPRT}" | tr -d 'x' | bc)
+[   -z "${PORT}"   ] && PORT="0"
+
+PORT=$(printf "%.14d" "${PORT}")
 
 echo "--------"
 echo "opcode:    \"${the_opcode}\" (${opcode[${the_opcode}]})"
@@ -709,8 +854,8 @@ IMMEDIATE=
 [ ! -z "${SRCREG}" ] && echo "SRCREG:    ${SRCREG} (SRCVAL: ${SRCVAL})"
 [ ! -z "${SRCIMM}" ] && echo "SRCIMM:    ${SRCIMM}"
 [ ! -z "${SRCREF}" ] && echo "SRCREF:    ${SRCREF}"
-echo "ADDRMODE:  ${ADDRMODE}"
-echo "PORT:      ${PORT}"
+echo "ADDRMODE:  0b${ADDRMODE}"
+echo "PORT:      0b${PORT}"
 echo "--------"
 echo "instruction: ${opcode[${the_opcode}]} ${imm_flag} ${DSTVAL} ${SRCVAL} ${ADDRMODE} ${PORT}"
 binary="${opcode[${the_opcode}]}${imm_flag}${DSTVAL}${SRCVAL}${ADDRMODE}${PORT}"
