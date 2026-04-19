@@ -62,7 +62,8 @@ IMMEDIATE="(${BIN}|${OCT}|${DEC1}|${DEC2}|${FLOAT}|${HEX1}|${HEX2})"
 INDEX="[-+]"
 INDEXED="${REGISTER}[-+]${IMMEDIATE}"
 #DEREF="[[](${REGISTER}|${IMMEDIATE}|${INDEXED})[]]"
-DEREF="[[].*[]]"
+DEREF='[[].*[]]'
+IOPORT='(TIM|RNG|GPU|SPU|INP|CAR|MEM)_[A-Z][A-Za-z]*|0[Xx][0-9A-F]{3}'
 OPERAND="(${DEREF}|${REGISTER}|${IMMEDIATE})"
 #OPERAND="[[]?(${REGISTER}|${IMMEDIATE}|${REGISTER}${INDEXED}${IMMEDIATE})[]]?"
 ZERO_OPCODE='^(HLT|WAIT|RET|MOVS|SETS)$'
@@ -366,56 +367,95 @@ function parse_operator()
     echo "${p_data}"
 }
 
+########################################################################################
+##
+## parse_param(): general operand processing; figure out what it is and obtain
+##                useful, pertinent data that is returned
+##
 function parse_param()
 {
     operand="${1}"
+    categories="${2}"
+    flags="${3}"
     pFLG=0
+	pREF=
 
-    if [ ! -z "${operand}" ]; then
+	echo "[parse_param] operand:    ${operand}"    1>&2
+	echo "[parse_param] categories: ${categories}" 1>&2
+	echo "[parse_param] flags:      ${flags}"      1>&2
 
-        ################################################################################
-        ##
-        ## check for a dereferenced parameter, mark it and then update the
-        ## parameter string for further processing
-        ##
+    ####################################################################################
+    ##
+    ## check for a dereferenced parameter, mark it and then update the
+    ## parameter string for further processing
+    ##
+    if [ ! -z "${flags}" ] && [ "${flags}" = "deref" ]; then
+		echo "dereferencing: allowed" 1>&2
         chk=$(echo "${operand}" | egrep -o "^${DEREF}$"   | wc -l)
         if [ "${chk}" -eq 1 ]; then
             pREF="true"
             operand=$(echo "${operand}" | tr -d '[' | tr -d ']')
         fi
-
-        ################################################################################
-        ##
-        ## check for register parameter
-        ##
-        pREG=$(parse_reg "${operand}")
-
-        ################################################################################
-        ##
-        ## check for immediate parameter
-        ##
-        pIMM=$(parse_imm "${operand}")
-        [ ! -z "${pIMM}" ] && pFLG=1
-
-        ################################################################################
-        ##
-        ## check for an indexed parameter, split it and identify each of
-        ## the components
-        ##
-        chk=$(echo       "${operand}" | egrep -o "^${INDEXED}$" | wc -l)
-        if [ "${chk}" -eq 1 ]; then
-            [ -z "${pREF}"  ] && echo "ERROR: invalid indexing use" && exit 8
-            delim=$(echo "${operand}" | grep -o '[+]')
-            [ -z "${delim}" ] && delim=$(echo "${operand}" | grep -o '[-]')
-            left=$(echo  "${operand}" | cut -d"${delim}" -f1)
-            right=$(echo "${operand}" | cut -d"${delim}" -f2)
-            pREG=$(parse_reg "${left}")
-            pIMM=$(parse_imm "${right}")
-            pFLG=1
-            [ "${delim}" = "-" ] && pIMM=$(${NEGATE} ${pIMM})
-        fi
     fi
-        
+
+    ####################################################################################
+    ##
+    ## process for each indicated category, based on the potential set
+    ## of scenarios per given instruction
+    ##
+    for item in ${categories}; do
+
+        case ${item} in
+
+            ############################################################################
+            ##
+            ## check for immediate parameter
+            ##
+            "immediate")
+                pIMM=$(parse_imm "${operand}")
+                [ ! -z "${pIMM}" ] && pFLG=1 && break
+                ;;
+
+            ############################################################################
+            ##
+            ## check for register parameter
+            ##
+            "register")
+                pREG=$(parse_reg "${operand}")
+				[ ! -z "${pREG}" ] && break
+                ;;
+
+            ############################################################################
+            ##
+            ## check for an indexed parameter, split it and identify each of
+            ## the components
+            ##
+            "indexed")
+                [ -z "${pREF}"  ] && echo "ERROR: invalid indexing use" && exit 8
+                chk=$(echo       "${operand}" | egrep -o "^${INDEXED}$" | wc -l)
+                if [ "${chk}" -eq 1 ]; then
+                    delim=$(echo "${operand}" | grep -o '[+]')
+                    [ -z "${delim}" ] && delim=$(echo "${operand}" | grep -o '[-]')
+                    left=$(echo  "${operand}" | cut -d"${delim}" -f1)
+                    right=$(echo "${operand}" | cut -d"${delim}" -f2)
+                    pREG=$(parse_reg "${left}")
+                    pIMM=$(parse_imm "${right}")
+                    pFLG=1
+                    [ "${delim}" = "-" ] && pIMM=$(${NEGATE} ${pIMM})
+					break
+                fi
+                ;;
+
+            ############################################################################
+            ##
+            ## check for IOPort parameter (symbolic or hex numeric)
+            ##
+            "ioport")
+                pREG=$(parse_iop "${operand}")
+                ;;
+        esac
+    done
+
     ################################################################################
     ##
     ## For register transactions, also determine its numeric value (SRCVAL)
@@ -428,7 +468,8 @@ function parse_param()
     ##
     ## Display the results
     ##
-    echo "${pREG}:${pVAL}:${pIMM}:${pREF}:${pFLG}"
+    echo "${pREG}:${pVAL}:${pIMM}:${pREF}:${pFLG}:${pIOP}"
+    echo "[parse_param] ${pREG}:${pVAL}:${pIMM}:${pREF}:${pFLG}:${pIOP}" 1>&2
 }
 
 ########################################################################################
@@ -461,54 +502,118 @@ for token in `echo "${line_input}" | tr -d ','`; do
     let num_operands=num_operands+1
 done
 let num_operands=num_operands-1
+ 
+########################################################################################
+##
+## validate instruction
+##
+[   -z "${opcode[${the_opcode}]}" ] && echo "invalid instruction \"${the_opcode}\""
+[   -z "${opcode[${the_opcode}]}" ] && exit 2
 
 case "${the_opcode}" in
-    "IN"|"OUT")
+    "IN")
+        dst_operand_types="register"
+        dst_operand_flags=
+        src_operand_types="ioport"
+        src_operand_flags=
         ;;
 
-    "JMP"|"CALL"|"PUSH"|"POP"|"CMPS"|"CIF"|"CFI"|"CIB"|"CFB"|"NOT"|"BNOT"|"ISGN"|"IABS")
+    "OUT")
+        dst_operand_types="ioport"
+        dst_operand_flags=
+        src_operand_types="immediate register"
+        src_operand_flags=
+        ;;
+
+    "JMP"|"CALL")
+        dst_operand_types="immediate register"
+        dst_operand_flags=
+        src_operand_types=
+        src_operand_flags=
+        ;;
+
+    "PUSH"|"POP"|"CMPS"|"CIF"|"CFI"|"CIB"|"CFB"|"NOT"|"BNOT"|"ISGN"|"IABS")
+        dst_operand_types="register"
+        dst_operand_flags=
+        src_operand_types=
+        src_operand_flags=
         ;;
     
     "FSGN"|"FABS"|"FLR"|"CEIL"|"ROUND"|"SIN"|"ACOS"|"LOG")
+        dst_operand_types="register"
+        dst_operand_flags=
+        src_operand_types=
+        src_operand_flags=
         ;;
 
     "HLT"|"WAIT"|"RET"|"MOVS"|"SETS")
+        dst_operand_types=
+        dst_operand_flags=
+        src_operand_types=
+        src_operand_flags=
+        ;;
+
+    "LEA")
+        dst_operand_types="register"
+        dst_operand_flags=
+        src_operand_types="register indexed"
+        src_operand_flags="deref"
+        ;;
+    
+    "MOV")
+        dst_operand_types="immediate register indexed"
+        dst_operand_flags="deref"
+        src_operand_types="immediate register indexed"
+        src_operand_flags="deref"
         ;;
     
     *)
-        ################################################################################
-        ##
-        ## Paramicate the destination operand, breaking out the behavioural attributes
-        ##
-        result=$(parse_param ${dst_operand})
-        DSTREG=$(echo "${result}" | cut -d':' -f1)
-        DSTVAL=$(echo "${result}" | cut -d':' -f2)
-        DSTIMM=$(echo "${result}" | cut -d':' -f3)
-        DSTREF=$(echo "${result}" | cut -d':' -f4)
-        DSTFLG=$(echo "${result}" | cut -d':' -f5)
-
-        ################################################################################
-        ##
-        ## Paramicate the source operand, breaking out the behavioural attributes
-        ##
-        result=$(parse_param ${src_operand})
-        SRCREG=$(echo "${result}" | cut -d':' -f1)
-        SRCVAL=$(echo "${result}" | cut -d':' -f2)
-        SRCIMM=$(echo "${result}" | cut -d':' -f3)
-        SRCREF=$(echo "${result}" | cut -d':' -f4)
-        SRCFLG=$(echo "${result}" | cut -d':' -f5)
-
-        ################################################################################
-        ##
-        ## Error check: at most, only one immediate flag can be set across both the
-        ## parameters
-        ##
-        if [ "${DSTFLG}" -eq 1 ] && [ "${SRCFLG}" -eq 1 ]; then
-            echo "ERROR: illegal multiple immediate operands"
-            exit 7
-        fi
+        dst_operand_types="register"
+        dst_operand_flags=
+        src_operand_types="immediate register"
+        src_operand_flags=
         ;;
 esac
+
+DSTFLG=0
+SRCFLG=0
+
+########################################################################################
+##
+## If available, process the destination operand
+##
+if [ ! -z "${dst_operand_types}" ]; then
+    result=$(parse_param ${dst_operand} "${dst_operand_types}" "${dst_operand_flags}")
+    DSTREG=$(echo "${result}" | cut -d':' -f1)
+    DSTVAL=$(echo "${result}" | cut -d':' -f2)
+    DSTIMM=$(echo "${result}" | cut -d':' -f3)
+    DSTREF=$(echo "${result}" | cut -d':' -f4)
+    DSTFLG=$(echo "${result}" | cut -d':' -f5)
+fi
+
+########################################################################################
+##
+## If available, process the source operand
+##
+if [ ! -z "${src_operand_types}" ]; then
+    result=$(parse_param ${src_operand} "${src_operand_types}" "${src_operand_flags}")
+    SRCREG=$(echo "${result}" | cut -d':' -f1)
+    SRCVAL=$(echo "${result}" | cut -d':' -f2)
+    SRCIMM=$(echo "${result}" | cut -d':' -f3)
+    SRCREF=$(echo "${result}" | cut -d':' -f4)
+    SRCFLG=$(echo "${result}" | cut -d':' -f5)
+fi
+
+########################################################################################
+##
+## Error check: at most, only one immediate flag can be set across both the
+## parameters
+##
+if [ "${DSTFLG}" -eq 1 ] && \
+   [ "${SRCFLG}" -eq 1 ]; then
+    echo "ERROR: illegal multiple immediate operands"
+    exit 7
+fi
 
 echo "the_opcode:      ${the_opcode}"
 echo "num_operands:    ${num_operands}"
