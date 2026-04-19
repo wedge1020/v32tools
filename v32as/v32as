@@ -8,7 +8,8 @@
 ###            option - description
 ### =================   ===================================================
 ###              bios   assemble for BIOS
-###              cart   assemble for CART (default)
+###              cart   assemble for CART
+###              none   standalone instruction assembly (default)
 ###  outfile=FILE.OBJ   specify output OBJ file
 ###           verbose   increase verbosity
 ###              help   display usage information and exit
@@ -24,10 +25,10 @@
 ##
 ## Process command-line arguments
 ##
-DO_HELP=$(echo "${*}" | egrep -qio '\<help\>' && echo "true"  || echo "false")
-VERBOSE=$(echo "${*}" | egrep -qio '\<verbos' && echo "true"  || echo "false")
-DO_BIOS=$(echo "${*}" | egrep -qio '\<bios\>' && echo "true"  || echo "false")
-DO_CART=$(echo "${*}" | egrep -qio '\<bios\>' && echo "false" || echo "true")
+DO_HELP=$(echo "${*}" | egrep -qio '\<help\>' && echo "true" || echo "false")
+VERBOSE=$(echo "${*}" | egrep -qio '\<verbos' && echo "true" || echo "false")
+DO_BIOS=$(echo "${*}" | egrep -qio '\<bios\>' && echo "true" || echo "false")
+DO_CART=$(echo "${*}" | egrep -qio '\<cart\>' && echo "true" || echo "false")
 
 ########################################################################################
 ##
