@@ -600,6 +600,33 @@ function parse_param()
     echo "[parse_param] ${pREG}:${pVAL}:${pIMM}:${pREF}:${pFLG}:${pIOP}" 1>&2
 }
 
+function do_error()
+{
+    offset="${1}"
+    offset=$(echo "${offset}" | egrep -io "^${HEX1}$")
+    [ ! -z "${offset}" ] && shift 1
+
+    opcode="${1}"
+    dst_operand="${2}"
+    src_operand="${3}"
+    error_type="${4}"
+
+    [   -z "${error_type}" ] && error_type="invalid use"
+
+    [   -z "${offset}" ] && echo -n "[ERROR] "
+    [ ! -z "${offset}" ] && echo -n "[ERROR@${offset}] "
+
+    if [   ! -z "${src_operand}" ]; then
+        echo "${error_type} on \"${opcode} ${dst_operand}, ${src_operand}\""
+    elif [ ! -z "${dst_operand}" ]; then
+        echo "${error_type} on \"${opcode} ${dst_operand}\""
+    else
+        echo "${error_type} on \"${opcode}\""
+    fi
+    
+    exit 1
+}
+
 ########################################################################################
 ##
 ## obtain input
@@ -621,7 +648,7 @@ for token in `echo "${line_input}" | tr -d ','`; do
 
     if [ "${num_operands}" -eq 0 ]; then
         the_opcode=$(echo  "${token}" | egrep -io "${OPCODE}")
-		the_opcode="${the_opcode^^}"
+        the_opcode="${the_opcode^^}"
     elif [ "${num_operands}" -eq 1 ]; then
         dst_operand=$(echo "${token}" | egrep -io "${OPERAND}")
     else
@@ -720,6 +747,9 @@ echo "======================================="
 ##
 if [ ! -z "${dst_operand_types}" ]; then
     result=$(parse_param ${dst_operand} "${dst_operand_types}" "${dst_operand_flags}")
+    if [ "${result}" = "::::0:" ]; then
+        do_error ${the_opcode} ${dst_operand} ${src_operand} syntax
+    fi
     DSTREG=$(echo "${result}" | cut -d':' -f1)
     DSTVAL=$(echo "${result}" | cut -d':' -f2)
     DSTIMM=$(echo "${result}" | cut -d':' -f3)
@@ -734,6 +764,9 @@ fi
 ##
 if [ ! -z "${src_operand_types}" ]; then
     result=$(parse_param ${src_operand} "${src_operand_types}" "${src_operand_flags}")
+    if [ "${result}" = "::::0:" ]; then
+        do_error ${the_opcode} ${dst_operand} ${src_operand} syntax
+    fi
     SRCREG=$(echo "${result}" | cut -d':' -f1)
     SRCVAL=$(echo "${result}" | cut -d':' -f2)
     SRCIMM=$(echo "${result}" | cut -d':' -f3)
@@ -749,8 +782,8 @@ fi
 ##
 if [ "${DSTFLG}" -eq 1 ] && \
    [ "${SRCFLG}" -eq 1 ]; then
-    echo "ERROR: illegal multiple immediate operands"
-    exit 7
+    do_error ${the_opcode} ${dst_operand} ${src_operand} syntax
+    #echo "ERROR: illegal multiple immediate operands"
 fi
 
 echo "the_opcode:      ${the_opcode}"
