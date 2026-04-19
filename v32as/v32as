@@ -620,11 +620,12 @@ num_operands=0
 for token in `echo "${line_input}" | tr -d ','`; do
 
     if [ "${num_operands}" -eq 0 ]; then
-        the_opcode=$(echo  "${token}" | egrep -o "${OPCODE}")
+        the_opcode=$(echo  "${token}" | egrep -io "${OPCODE}")
+		the_opcode="${the_opcode^^}"
     elif [ "${num_operands}" -eq 1 ]; then
-        dst_operand=$(echo "${token}" | egrep -o "${OPERAND}")
+        dst_operand=$(echo "${token}" | egrep -io "${OPERAND}")
     else
-        src_operand=$(echo "${token}" | egrep -o "${OPERAND}")
+        src_operand=$(echo "${token}" | egrep -io "${OPERAND}")
     fi
 
     let num_operands=num_operands+1
