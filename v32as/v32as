@@ -10,6 +10,8 @@
 ###              bios   assemble for BIOS
 ###              cart   assemble for CART
 ###              none   standalone instruction assembly (default)
+###              step   pause after each instruction
+###            binary   output resulting binary machine code to STDOUT
 ###           verbose   increase verbosity
 ###              help   display usage information and exit
 ### 
@@ -28,7 +30,9 @@ DO_HELP=$(echo "${*}" | egrep -qio '\<help\>' && echo "true" || echo "false")
 VERBOSE=$(echo "${*}" | egrep -qio '\<verbos' && echo "true" || echo "false")
 DO_BIOS=$(echo "${*}" | egrep -qio '\<bios\>' && echo "true" || echo "false")
 DO_CART=$(echo "${*}" | egrep -qio '\<cart\>' && echo "true" || echo "false")
-REGEX='\<(bios|cart|none|verbose|help)\>'
+BINARY=$(echo  "${*}" | egrep -qio '\<binary' && echo "true" || echo "false")
+DO_STEP=$(echo "${*}" | egrep -qio '\<step\>' && echo "true" || echo "false")
+REGEX='\<(bios|cart|none|binary|step|verbose|help)\>'
 ARGS=$(echo    "${*}"    | tr ' ' '\n' | egrep -v "${REGEX}" | tr '\n' ' ')
 ARGS=$(echo    "${ARGS}" | grep -v '^[ ]*$')
 
@@ -46,7 +50,7 @@ BINCODE=$(whereis -b bincode | cut -d' ' -f2)
 FLOATIFY="${BINCODE} -t -f "
 NEGATE="${BINCODE} -t -n -w "
 TMP=$(mktemp -p /tmp v32as.XXXX)
-DATAFILE="${TMP}.bin"
+BINFILE="${TMP}.bin"
 LABELSYM="${TMP}.SYM"
 
 ########################################################################################
@@ -54,10 +58,6 @@ LABELSYM="${TMP}.SYM"
 ## Establish RegEx patterns for tokens
 ##
 OPCODE='^(IN|JT|JF|OR|[A-Z][A-Z2]{2,4})$'
-INT_TWO_OPCODE="^(JT|JF|IEQ|INE|IGT|IGE|ILT|ILE|MOV|LEA|IN|OUT|AND|OR|XOR|SHL"
-INT_TWO_OPCODE="${INT_TWO_OPCODE}|IADD|ISUB|IMUL|IDIV|IMOD|IMIN|IMAX)$"
-FLOAT_TWO_OPCODE="^(FEQ|FNE|FGT|FGE|FLT|FLE|FADD"
-FLOAT_TWO_OPCODE="${FLOAT_TWO_OPCODE}|FSUB|FMUL|FDIV|FMOD|FMIN|FMAX|ATAN2|POW)$"
 REGISTER='(R[0-9]|R1[0-5]|BP|SP|CR|SR|DR)'
 HEX1='0[Xx][0-9A-F]{1,8}'
 HEX2='[0-9A-F]{1,8}[Hh]'
@@ -243,6 +243,7 @@ imm_flag=0
 function getregnum()
 {
     REG="${1}"
+    VAL=
     case "${REG}" in
         "CR")
             VAL="1011"
@@ -483,8 +484,8 @@ function parse_iop()
     #[   -z "${portnum}" ] && portnum="${IOPORTCMD[${portname}]}"
     #[   -z "${portnum}" ] && portnum=$(echo "${portname}" | egrep -o "${IOPORTCMDHEX}$")
 
-    echo "[parse_iop] portname: ${portname}" 1>&2
-    echo "[parse_iop] portnum:  ${portnum}"  1>&2
+    debug "portname:  ${portname}" 1>&2
+    debug "portnum:   ${portnum}"  1>&2
 
     echo "${portnum}"
 }
@@ -504,9 +505,9 @@ function parse_param()
     pFLG=0
     pREF=
 
-    debug    "operand:    ${operand}"    1>&2
-    debug    "categories: ${categories}" 1>&2
-    debug    "flags:      ${flags}"      1>&2
+   # debug    "operand:    ${operand}"    1>&2
+   # debug    "categories: ${categories}" 1>&2
+   # debug    "flags:      ${flags}"      1>&2
 
     ####################################################################################
     ##
@@ -592,7 +593,6 @@ function parse_param()
     ## Display the results
     ##
     echo     "${pREG}:${pVAL}:${pIMM}:${pREF}:${pFLG}:${pIOP}"
-    debug    "${pREG}:${pVAL}:${pIMM}:${pREF}:${pFLG}:${pIOP}" 1>&2
 }
 
 function do_error()
@@ -630,6 +630,12 @@ function debug()
 {
     ####################################################################################
     ##
+    ## if verbosity is not enabled, bail out
+    ##
+    [ "${VERBOSE}" = "false" ] && return
+
+    ####################################################################################
+    ##
     ## declare and initialize variables
     ##
     NONEWLINE=
@@ -640,6 +646,7 @@ function debug()
     ## grab the location from the BASH function call array
     ##
     place="${FUNCNAME[1]}"
+    [ "${place}" = "main" ] && place=$(basename ${0})
 
     ####################################################################################
     ##
@@ -677,8 +684,10 @@ function debug()
 ##
 ## start of assembler logic
 ##
-[ "${DO_BIOS}" = "true" ] && offset=0x10000000 && echo "[v32as] assembling for BIOS"
-[ "${DO_CART}" = "true" ] && offset=0x20000000 && echo "[v32as] assembling for CART"
+[ "${DO_BIOS}" = "true" ] && offset=0x10000000
+[ "${DO_BIOS}" = "true" ] && debug -H "[v32as] assembling for BIOS"
+[ "${DO_CART}" = "true" ] && offset=0x20000000
+[ "${DO_CART}" = "true" ] && debug -H "[v32as] assembling for CART"
 
 ########################################################################################
 ##
@@ -707,12 +716,22 @@ for file in ${DATAFILE}; do
     ## obtain input
     ##
     for line in $(cat ${file} | tr ' ' '@'); do
+
+        ################################################################################
+        ##
+        ## reset variables
+        ##
+        the_opcode=
+        imm_flag=0
+        ADDR=
+        PORT=
+
         line_input=$(echo "${line}" | tr '@' ' ')
         line_input=$(echo  "${line_input}" | tr -s ' ')       # excessive spaces
         line_input=$(echo  "${line_input}" | sed 's/ ,/,/g')  # space before comma
         line_input=$(echo  "${line_input}" | sed 's/;.*$//g') # comments
 
-        debug    "line_input:        ${line_input}"
+        debug    "line_input:    ${line_input}"
 
         num_operands=0
         for token in `echo "${line_input}" | tr -d ','`; do
@@ -821,13 +840,6 @@ for file in ${DATAFILE}; do
         DSTFLG=0
         SRCFLG=0
 
-        debug    "======================================="
-        debug    "the_opcode:        ${the_opcode}"
-        debug    "dst_operand:       ${dst_operand}"
-        debug    "dst_types: ${dst_types}"
-        debug    "dst_flags: ${dst_flags}"
-        debug    "======================================="
-
         ############################################################################
         ##
         ## If available, process the destination operand
@@ -872,11 +884,6 @@ for file in ${DATAFILE}; do
             do_error ${offset} "${the_opcode} ${dst_operand} ${src_operand}" syntax
             #echo "ERROR: illegal multiple immediate operands"
         fi
-
-        debug    "the_opcode:      ${the_opcode}"
-        debug    "num_operands:    ${num_operands}"
-        [ ! -z "${dst_operand}" ] && debug    "first_operand:   ${dst_operand}"
-        [ ! -z "${src_operand}" ] && debug    "second_operand:  ${src_operand}"
 
         ################################################################################
         ##
@@ -960,9 +967,6 @@ for file in ${DATAFILE}; do
 
         PORT=$(printf "%.14d" "${PORT}")
 
-        debug "--------"
-        debug "opcode:    \"${the_opcode}\" (${opcode[${the_opcode}]})"
-        debug "imm_flag:  ${imm_flag}"
         IMMEDIATE=
 
         [ ! -z "${DSTREG}" ] || IMMEDIATE="${DSTIMM}"
@@ -972,28 +976,114 @@ for file in ${DATAFILE}; do
         [ ! -z "${DSTIMM}" ] && IMMEDIATE="${DSTIMM}"
         [ ! -z "${SRCIMM}" ] && IMMEDIATE="${SRCIMM}"
 
-        [ ! -z "${DSTREG}" ] && debug "DSTREG:    ${DSTREG} (DSTVAL: ${DSTVAL})"
-        [ ! -z "${DSTIMM}" ] && debug "DSTIMM:    ${DSTIMM}"
-        [ ! -z "${DSTREF}" ] && debug "DSTREF:    ${DSTREF}"
-        [ ! -z "${SRCREG}" ] && debug "SRCREG:    ${SRCREG} (SRCVAL: ${SRCVAL})"
-        [ ! -z "${SRCIMM}" ] && debug "SRCIMM:    ${SRCIMM}"
-        [ ! -z "${SRCREF}" ] && debug "SRCREF:    ${SRCREF}"
+#        [ ! -z "${DSTREG}" ] && debug "DSTREG:    ${DSTREG} (DSTVAL: ${DSTVAL})"
+#        [ ! -z "${DSTIMM}" ] && debug "DSTIMM:    ${DSTIMM}"
+#        [ ! -z "${DSTREF}" ] && debug "DSTREF:    ${DSTREF}"
+#        [ ! -z "${SRCREG}" ] && debug "SRCREG:    ${SRCREG} (SRCVAL: ${SRCVAL})"
+#        [ ! -z "${SRCIMM}" ] && debug "SRCIMM:    ${SRCIMM}"
+#        [ ! -z "${SRCREF}" ] && debug "SRCREF:    ${SRCREF}"
 
-        debug    "ADDR:  0b${ADDR}"
-        debug    "PORT:      0b${PORT}"
-        debug    "--------"
-        debug -n "instruction: ${opcode[${the_opcode}]} ${imm_flag} ${DSTVAL} "
-        debug -H "${SRCVAL} ${ADDR} ${PORT}"
-
+        ################################################################################
+        ##
+        ## form the current instruction binary, convert to hexadecimal
+        ##
         binary="${opcode[${the_opcode}]}${imm_flag}${DSTVAL}${SRCVAL}${ADDR}${PORT}"
         instruction=$(echo   "obase=10; ibase=2; ${binary}" | bc -q)
         instruction=$(printf "0x%.8X" "${instruction}")
 
-        [ ! -z "${instruction}" ] && echo "instruction: ${instruction}"
-        [ ! -z "${IMMEDIATE}"   ] && echo "immediate:   ${IMMEDIATE}"
+        ############################################################################
+        ##
+        ## report on the instruction being processed
+        ##
+        if [ ! -z "${the_opcode}" ]; then
+            debug    "======================================================"
+            if [ ! -z "${offset}" ]; then
+                debug    "offset:        ${offset}"
+                debug    "------------------------------------------------------"
+            fi
+            debug    "the_opcode:    \"${the_opcode}\" (0b${opcode[${the_opcode}]})"
+            debug    "------------------------------------------------------"
+            debug    "imm_flag:      ${imm_flag}"
+            debug    "------------------------------------------------------"
+            if [ ! -z "${dst_operand}" ]; then
+                debug    "dst_operand:   ${dst_operand}"
+                debug    "dst_types:     ${dst_types}"
+                debug    "dst_flags:     ${dst_flags}"
+            else
+                debug    "no dst:        0b0000"
+            fi
+            debug    "------------------------------------------------------"
+            if [ ! -z "${src_operand}" ]; then
+                debug    "src_operand:   ${src_operand}"
+                debug    "src_types:     ${src_types}"
+                debug    "src_flags:     ${src_flags}"
+            else
+                debug    "no src:        0b0000"
+            fi
+            debug    "------------------------------------------------------"
+            debug    "ADDR:          0b${ADDR}"
+            debug    "------------------------------------------------------"
+            debug    "PORT:          0b${PORT}"
+            debug    "======================================================"
+            debug -n "instruction:   ${opcode[${the_opcode}]} ${imm_flag} ${DSTVAL} "
+            debug -H "${SRCVAL} ${ADDR} ${PORT}"
+            hexalign="${opcode[${the_opcode}]}${imm_flag}${DSTVAL}"
+            hexalign="${hexalign}${SRCVAL}${ADDR}${PORT}"
+            debug -n "instruction:   "
+            for ((index=1; index<=32; index+=4)); do
+                let indexend=index+3
+                if [ "${index}" -lt 28 ]; then
+                    debug -n -H "$(echo ${hexalign} | cut -c${index}-${indexend}) "
+                else
+                    debug    -H "$(echo ${hexalign} | cut -c${index}-${indexend}) "
+                fi
+            done
+            debug    "------------------------------------------------------"
+            debug    "INSTRUCTION:   ${instruction}"
+            if [ ! -z "${IMMEDIATE}" ]; then
+                debug    "------------------------------------------------------"
+                debug    "IMMEDIATE:     ${IMMEDIATE}"
+            fi
+            debug    "======================================================"
+        fi
+
+        ################################################################################
+        ##
+        ## if not in binary mode, output the hex of the instruction and
+        ## any immediate data to STDOUT
+        ##
+        if [ "${BINARY}" = "false" ] && [ "${VERBOSE}" = "false" ]; then
+            [ ! -z "${offset}"      ] && echo    "offset:      ${offset}"
+            [ ! -z "${instruction}" ] && echo    "instruction: ${instruction}"
+            [ ! -z "${IMMEDIATE}"   ] && echo    "immediate:   ${IMMEDIATE}"
+            echo "-----------------------"
+        fi
+
+        ################################################################################
+        ##
+        ## if single step is enabled: pause for confirmation
+        ##
+        [ "${DO_STEP}" = "true" ] && read -e confirmation
+        [ "${VERBOSE}" = "true" ] && clear
+
+        ################################################################################
+        ##
+        ## adjust offset (if offsets are being kept)
+        ##
+        if [ ! -z "${offset}" ]; then
+            offset=$(echo "obase=16; ibase=16; ${offset}+1" | tr -d 'x' | bc)
+            if [ ! -z "${IMMEDIATE}" ]; then
+                offset=$(echo "obase=16; ibase=16; ${offset}+1" | tr -d 'x' | bc)
+            fi
+            offset=$(printf "0x%.8X" "0x${offset}")
+        fi
     done
 done
 
-rm -f ${TMP} ${LABELSYM} ${DATAFILE}
+########################################################################################
+##
+## remove all generated temporary files
+##
+rm -f ${TMP} ${LABELSYM} ${BINFILE}
 
 exit 0
