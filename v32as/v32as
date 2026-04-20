@@ -76,8 +76,8 @@ GPUCMDSYM='GPU(Command|BlendingMode)_[A-Z][A-Za-z]*'
 SNDCMDSYM='SPU(Command|ChannelState)_[A-Z][A-Za-z]*'
 IOPORTCMDHEX='0[Xx][1-4][0-5]'
 IOPORT="${IOPORTSYM}|${IOPORTHEX}"
-OPERAND="(${DEREF}|${REGISTER}|${IMMEDIATE}|${IOPORT})"
 LABEL='_[_A-Za-z0-9][_A-Za-z0-9]*'
+OPERAND="(${DEREF}|${REGISTER}|${IMMEDIATE}|${IOPORT}|${LABEL})"
 
 declare -A ITYPE
 ITYPE["hex1"]="^${HEX1}$"
@@ -425,7 +425,10 @@ function parse_imm()
                 if [ ! -z "${d_imm}" ]; then
                     l_imm="true"
                     lchk=$(cat ${LABELSYM} | egrep -o "^${d_imm}:" | wc -l)
-                    [ "${lchk}" -gt 0 ] && echo "${d_imm}:"             >> ${LABELSYM}
+                    if [ "${lchk}" -eq 1 ]; then
+                        laddr=$(cat ${LABELSYM} | egrep "^${d_imm}:" | cut -d':' -f2)
+                        d_imm="${laddr}"
+                    fi
                 fi
                 ;;
         esac
@@ -592,7 +595,7 @@ function parse_param()
     ##
     ## Display the results
     ##
-    echo     "${pREG}:${pVAL}:${pIMM}:${pREF}:${pFLG}:${pIOP}"
+    echo     "${pREG}:${pVAL}:${pIMM}:${pREF}:${pFLG}:${pIOP}:${label}"
 }
 
 function do_error()
@@ -699,11 +702,17 @@ if [   -z "${ARGS}" ]; then
     ##
     ## polish input on its way to the input file
     ##
-    cat | tr -s ' ' | sed 's/ ,/,/g' | sed 's/;.*$//g'                       >  ${TMP}
+    cat | tr -s ' ' | sed 's/ ,/,/g' | sed 's/;.*$//g'                  >  ${TMP}
     DATAFILE="${TMP}"
 else
     DATAFILE="${ARGS}"
 fi
+
+########################################################################################
+##
+## ensure LABELSYM exists
+##
+echo -n                                                                 >  ${LABELSYM}
 
 ########################################################################################
 ##
@@ -723,8 +732,21 @@ for file in ${DATAFILE}; do
         ##
         the_opcode=
         imm_flag=0
+        dst_operand=
+        DSTREG=
+        DSTVAL=
+        DSTIMM=
+        DSTFLG=0
+        src_operand=
+        SRCREG=
+        SRCVAL=
+        SRCIMM=
+        SRCFLG=0
         ADDR=
         PORT=
+        instruction=
+        IMMEDIATE=
+        LABELFLAG="false"
 
         line_input=$(echo "${line}" | tr '@' ' ')
         line_input=$(echo  "${line_input}" | tr -s ' ')       # excessive spaces
@@ -748,12 +770,13 @@ for file in ${DATAFILE}; do
                     fi
                 else
                     debug    "LABEL definition \"${token}\" at ${offset}"
-                    lchk=$(cat ${LABELSYM} | egrep -o "^${d_imm}:" | wc -l)
-                    ochk=$(cat ${LABELSYM} | egrep -o "^${d_imm}:${offset}" | wc -l)
-                    if [ "${ochk}" -gt 0 ]; then
+                    lchk=$(cat ${LABELSYM} | egrep -o "^${token}"  | wc -l)
+                    [ "${lchk}" -eq 0 ] && echo "${token}${offset}"    >> ${LABELSYM}
+                    if [ "${lchk}" -gt 0 ]; then
                         do_error ${offset} " " "duplicate label ${token}"
                     fi
-                    [ "${lchk}" -gt 0 ] && echo "${token}:${offset}"    >> ${LABELSYM}
+                    LABELFLAG="true"
+                    break
                 fi
             elif [ "${num_operands}" -eq 1 ]; then
                 dst_operand=$(echo "${token}" | egrep -io "${OPERAND}")
@@ -764,6 +787,15 @@ for file in ${DATAFILE}; do
             let num_operands=num_operands+1
         done
         let num_operands=num_operands-1
+
+        ############################################################################
+        ##
+        ## if we are dealing with a label definition, avoid further instruction
+        ## processing
+        ##
+        if [ "${LABELFLAG}" = "true" ]; then
+            continue
+        fi
  
         case "${the_opcode}" in
             "IN")
@@ -837,16 +869,13 @@ for file in ${DATAFILE}; do
                 ;;
         esac
 
-        DSTFLG=0
-        SRCFLG=0
-
         ############################################################################
         ##
         ## If available, process the destination operand
         ##
         if [ ! -z "${dst_types}" ]; then
             result=$(parse_param ${dst_operand} "${dst_types}" "${dst_flags}")
-            if [ "${result}" = "::::0:" ]; then
+            if [ "${result}" = "::::0::" ]; then
                 do_error ${offset} "${the_opcode} ${dst_operand} ${src_operand}" syntax
             fi
             DSTREG=$(echo "${result}" | cut -d':' -f1)
@@ -855,6 +884,7 @@ for file in ${DATAFILE}; do
             DSTREF=$(echo "${result}" | cut -d':' -f4)
             DSTFLG=$(echo "${result}" | cut -d':' -f5)
             DSTPRT=$(echo "${result}" | cut -d':' -f6)
+            DSTLBL=$(echo "${result}" | cut -d':' -f7)
         fi
 
         ################################################################################
@@ -872,6 +902,7 @@ for file in ${DATAFILE}; do
             SRCREF=$(echo "${result}" | cut -d':' -f4)
             SRCFLG=$(echo "${result}" | cut -d':' -f5)
             SRCPRT=$(echo "${result}" | cut -d':' -f6)
+            SRCLBL=$(echo "${result}" | cut -d':' -f7)
         fi
 
         ################################################################################
@@ -966,8 +997,6 @@ for file in ${DATAFILE}; do
         [   -z "${PORT}"   ] && PORT="0"
 
         PORT=$(printf "%.14d" "${PORT}")
-
-        IMMEDIATE=
 
         [ ! -z "${DSTREG}" ] || IMMEDIATE="${DSTIMM}"
         [   -z "${DSTREG}" ] && DSTVAL="0000"
