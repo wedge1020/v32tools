@@ -72,6 +72,7 @@ SNDCMDSYM='SPU(Command|ChannelState)_[A-Z][A-Za-z]*'
 IOPORTCMDHEX='0[Xx][1-4][0-5]'
 IOPORT="${IOPORTSYM}|${IOPORTHEX}"
 OPERAND="(${DEREF}|${REGISTER}|${IMMEDIATE}|${IOPORT})"
+LABEL='_[_A-Za-z0-9][_A-Za-z0-9]*'
 
 declare -A ITYPE
 ITYPE["hex1"]="^${HEX1}$"
@@ -512,7 +513,7 @@ function parse_param()
             ## the components
             ##
             "indexed")
-                [ -z "${pREF}"  ] && do_error "ERROR: invalid indexing use"
+                [ -z "${pREF}"  ] && do_error ${offset} ${line_input} "invalid indexing use"
                 chk=$(echo       "${operand}" | egrep -o "^${INDEXED}$" | wc -l)
                 if [ "${chk}" -eq 1 ]; then
                     delim=$(echo "${operand}" | grep -o '[+]')
@@ -559,10 +560,10 @@ function do_error()
     offset=$(echo "${offset}" | egrep -io "^${HEX1}$")
     [ ! -z "${offset}" ] && shift 1
 
-    opcode="${1}"
-    dst_operand="${2}"
-    src_operand="${3}"
-    error_type="${4}"
+	opcode=$(echo      "${1}" | cut -d' ' -f1)
+	dst_operand=$(echo "${1}" | cut -d' ' -f2)
+	src_operand=$(echo "${1}" | cut -d' ' -f3)
+    error_type="${2}"
 
     [   -z "${error_type}" ] && error_type="invalid use"
 
@@ -658,8 +659,18 @@ num_operands=0
 for token in `echo "${line_input}" | tr -d ','`; do
 
     if [ "${num_operands}" -eq 0 ]; then
-        the_opcode=$(echo  "${token}" | egrep -io "${OPCODE}")
-        the_opcode="${the_opcode^^}"
+		label_check=$(echo "${token}" | egrep -io "^${LABEL}:$")
+		if [ -z "${label_check}" ]; then
+			the_opcode=$(echo  "${token}" | egrep -io "${OPCODE}")
+			the_opcode="${the_opcode^^}"
+			if [ -z "${opcode[${the_opcode}]}" ]; then
+				do_error ${offset} \
+						 "${the_opcode} ${dst_operand} ${src_operand}" \
+						 "invalid instruction"
+			fi
+		else
+			echo "LABEL ${token} at ${offset}"
+		fi
     elif [ "${num_operands}" -eq 1 ]; then
         dst_operand=$(echo "${token}" | egrep -io "${OPERAND}")
     else
@@ -670,13 +681,6 @@ for token in `echo "${line_input}" | tr -d ','`; do
 done
 let num_operands=num_operands-1
  
-########################################################################################
-##
-## validate instruction
-##
-[   -z "${opcode[${the_opcode}]}" ] && echo "invalid instruction \"${the_opcode}\""
-[   -z "${opcode[${the_opcode}]}" ] && exit 2
-
 case "${the_opcode}" in
     "IN")
         dst_operand_types="register"
@@ -759,7 +763,7 @@ debug    "======================================="
 if [ ! -z "${dst_operand_types}" ]; then
     result=$(parse_param ${dst_operand} "${dst_operand_types}" "${dst_operand_flags}")
     if [ "${result}" = "::::0:" ]; then
-        do_error ${offset} ${the_opcode} ${dst_operand} ${src_operand} syntax
+        do_error ${offset} "${the_opcode} ${dst_operand} ${src_operand}" syntax
     fi
     DSTREG=$(echo "${result}" | cut -d':' -f1)
     DSTVAL=$(echo "${result}" | cut -d':' -f2)
@@ -776,7 +780,7 @@ fi
 if [ ! -z "${src_operand_types}" ]; then
     result=$(parse_param ${src_operand} "${src_operand_types}" "${src_operand_flags}")
     if [ "${result}" = "::::0:" ]; then
-        do_error ${offset} ${the_opcode} ${dst_operand} ${src_operand} syntax
+        do_error ${offset} "${the_opcode} ${dst_operand} ${src_operand}" syntax
     fi
     SRCREG=$(echo "${result}" | cut -d':' -f1)
     SRCVAL=$(echo "${result}" | cut -d':' -f2)
@@ -793,7 +797,7 @@ fi
 ##
 if [ "${DSTFLG}" -eq 1 ] && \
    [ "${SRCFLG}" -eq 1 ]; then
-    do_error ${offset} ${the_opcode} ${dst_operand} ${src_operand} syntax
+    do_error ${offset} "${the_opcode} ${dst_operand} ${src_operand}" syntax
     #echo "ERROR: illegal multiple immediate operands"
 fi
 
