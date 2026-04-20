@@ -72,19 +72,6 @@ SNDCMDSYM='SPU(Command|ChannelState)_[A-Z][A-Za-z]*'
 IOPORTCMDHEX='0[Xx][1-4][0-5]'
 IOPORT="${IOPORTSYM}|${IOPORTHEX}"
 OPERAND="(${DEREF}|${REGISTER}|${IMMEDIATE}|${IOPORT})"
-ZERO_OPCODE='^(HLT|WAIT|RET|MOVS|SETS)$'
-ONE_OPCODE="^(JMP|CALL|PUSH|POP|CMPS|CIF|CFI|CIB|CFB|NOT|BNOT|ISGN|IABS|FSGN|FABS"
-ONE_OPCODE="${ONE_OPCODE}|FLR|CEIL|ROUND|SIN|ACOS|LOG)$"
-ONE_BRANCH="^(JMP|CALL)$"
-ZEROOPER="[^;]*${ZERO_OPCODE}"
-ONE_OPER="[^;]*${ONE_OPCODE} *${OPERAND}"
-TWO_OPER="[^;]*${INT_TWO_OPCODE} *${OPERAND} *, *${OPERAND}"
-
-declare -A OTYPE
-OTYPE["index"]="^${INDEXED}$"
-OTYPE["deref"]="^${DEREF}$"
-OTYPE["register"]="^${REGISTER}$"
-OTYPE["immediate"]="^${IMMEDIATE}$"
 
 declare -A ITYPE
 ITYPE["hex1"]="^${HEX1}$"
@@ -95,48 +82,10 @@ ITYPE["dec"]="^${DEC1}$"
 ITYPE["dec2"]="^${DEC2}$"
 ITYPE["float"]="^${FLOAT}$"
 
-declare -a ONE_BRANCH
-ONE_BRANCH[0]="${IMMEDIATE}"
-ONE_BRANCH[1]="${REGISTER}"
-
-declare -a ONE_PARAM
-ONE_PARAM[0]="${REGISTER}"
-
-declare -a TWO_PARAM
-TWO_PARAM[0]="${REGISTER} *, *${IMMEDIATE}"
-TWO_PARAM[1]="${REGISTER} *, *${REGISTER}"
-
 ########################################################################################
 ##
-## MOV has 8 different addressing modes, described via RegEx here
+## opcode array, providing the binary opcode values
 ##
-declare -a MOV_PARAM
-MOV_PARAM[0]="${IMMEDIATE}"
-MOV_PARAM[1]="${REGISTER}"
-MOV_PARAM[2]="[[]${IMMEDIATE}[]]"
-MOV_PARAM[3]="[[]${REGISTER}[]]"
-MOV_PARAM[4]="[[]${INDEXED}[]]"
-MOV_PARAM[5]="[[]${IMMEDIATE}[]]"
-MOV_PARAM[6]="[[]${REGISTER}[]]"
-MOV_PARAM[7]="[[]${INDEXED}[]]"
-
-declare -a LEA_PARAM
-LEA_PARAM[0]="${REGISTER} *, *[[]${REGISTER}[]]"
-LEA_PARAM[1]="${REGISTER} *, *[[]${INDEXED}[]]"
-
-declare -a IN_PARAM
-IN_PARAM[0]="${REGISTER} *, *${PORT}"
-
-declare -a OUT_PARAM
-OUT_PARAM[0]="${PORT} *, *${IMMEDIATE}"
-OUT_PARAM[1]="${PORT} *, *${REGISTER}"
-
-declare -a PTYPE
-PTYPE[0]="${ZERO_OPCODE}"
-PTYPE[1]="${ONE_OPCODE}"
-PTYPE[2]="${INT_TWO_OPCODE}"
-PTYPE[3]="${FLOAT_TWO_OPCODE}"
-
 declare -A opcode
 opcode["HLT"]="000000"
 opcode["WAIT"]="000001"
@@ -513,9 +462,9 @@ function parse_param()
     pFLG=0
     pREF=
 
-    echo "[parse_param] operand:    ${operand}"    1>&2
-    echo "[parse_param] categories: ${categories}" 1>&2
-    echo "[parse_param] flags:      ${flags}"      1>&2
+    debug    "operand:    ${operand}"    1>&2
+    debug    "categories: ${categories}" 1>&2
+    debug    "flags:      ${flags}"      1>&2
 
     ####################################################################################
     ##
@@ -523,7 +472,6 @@ function parse_param()
     ## parameter string for further processing
     ##
     if [ ! -z "${flags}" ] && [ "${flags}" = "deref" ]; then
-        echo "dereferencing: allowed" 1>&2
         chk=$(echo "${operand}" | egrep -o "^${DEREF}$"   | wc -l)
         if [ "${chk}" -eq 1 ]; then
             pREF="true"
@@ -564,7 +512,7 @@ function parse_param()
             ## the components
             ##
             "indexed")
-                [ -z "${pREF}"  ] && echo "ERROR: invalid indexing use" && exit 8
+                [ -z "${pREF}"  ] && do_error "ERROR: invalid indexing use"
                 chk=$(echo       "${operand}" | egrep -o "^${INDEXED}$" | wc -l)
                 if [ "${chk}" -eq 1 ]; then
                     delim=$(echo "${operand}" | grep -o '[+]')
@@ -601,8 +549,8 @@ function parse_param()
     ##
     ## Display the results
     ##
-    echo "${pREG}:${pVAL}:${pIMM}:${pREF}:${pFLG}:${pIOP}"
-    echo "[parse_param] ${pREG}:${pVAL}:${pIMM}:${pREF}:${pFLG}:${pIOP}" 1>&2
+    echo     "${pREG}:${pVAL}:${pIMM}:${pREF}:${pFLG}:${pIOP}"
+    debug    "${pREG}:${pVAL}:${pIMM}:${pREF}:${pFLG}:${pIOP}" 1>&2
 }
 
 function do_error()
@@ -634,6 +582,57 @@ function do_error()
 
 ########################################################################################
 ##
+## debug function (displays information to STDERR, when enabled)
+##
+function debug()
+{
+    ####################################################################################
+    ##
+    ## declare and initialize variables
+    ##
+	NONEWLINE=
+	NO_HEADER=
+
+    ####################################################################################
+    ##
+    ## grab the location from the BASH function call array
+    ##
+    place="${FUNCNAME[1]}"
+
+    ####################################################################################
+    ##
+    ## allow for turning off auto-newline
+    ##
+    [ "${1}" = "-n"       ] && NONEWLINE="true" && shift 1
+
+    ####################################################################################
+    ##
+    ## allow for turning off auto-newline
+    ##
+    [ "${1}" = "-H"       ] && NO_HEADER="true" && shift 1
+
+    ####################################################################################
+    ##
+    ## the content to actually be displayed
+    ##
+    message="${1}"
+
+    ####################################################################################
+    ##
+    ## display the header, if enabled
+    ##
+    [   -z "${NO_HEADER}" ] && echo -n "[${place}] " 1>&2
+
+    ####################################################################################
+    ##
+    ## deliver the message, based on settings
+    ##
+    [ ! -z "${NONEWLINE}" ] && echo -n "${message}"  1>&2
+    [   -z "${NONEWLINE}" ] && echo    "${message}"  1>&2
+}
+
+########################################################################################
+##
 ## start of assembler logic
 ##
 [ "${DO_BIOS}" = "true" ] && offset=0x10000000 && echo "[v32as] assembling for BIOS"
@@ -653,7 +652,7 @@ line_input=$(echo  "${line_input}" | tr -s ' ')
 line_input=$(echo  "${line_input}" | sed 's/ ,/,/g')  # remove any space before comma
 line_input=$(echo  "${line_input}" | sed 's/;.*$//g') # remove comments
 
-echo "line_input:      ${line_input}"
+debug    "line_input:        ${line_input}"
 
 num_operands=0
 for token in `echo "${line_input}" | tr -d ','`; do
@@ -746,12 +745,12 @@ esac
 DSTFLG=0
 SRCFLG=0
 
-echo "======================================="
-echo "the_opcode:        ${the_opcode}"
-echo "dst_operand:       ${dst_operand}"
-echo "dst_operand_types: ${dst_operand_types}"
-echo "dst_operand_flags: ${dst_operand_flags}"
-echo "======================================="
+debug    "======================================="
+debug    "the_opcode:        ${the_opcode}"
+debug    "dst_operand:       ${dst_operand}"
+debug    "dst_operand_types: ${dst_operand_types}"
+debug    "dst_operand_flags: ${dst_operand_flags}"
+debug    "======================================="
 
 ########################################################################################
 ##
@@ -798,10 +797,10 @@ if [ "${DSTFLG}" -eq 1 ] && \
     #echo "ERROR: illegal multiple immediate operands"
 fi
 
-echo "the_opcode:      ${the_opcode}"
-echo "num_operands:    ${num_operands}"
-[ ! -z "${dst_operand}" ] && echo "first_operand:   ${dst_operand}"
-[ ! -z "${src_operand}" ] && echo "second_operand:  ${src_operand}"
+debug    "the_opcode:      ${the_opcode}"
+debug    "num_operands:    ${num_operands}"
+[ ! -z "${dst_operand}" ] && debug    "first_operand:   ${dst_operand}"
+[ ! -z "${src_operand}" ] && debug    "second_operand:  ${src_operand}"
 
 ########################################################################################
 ##
@@ -883,10 +882,11 @@ fi
 
 PORT=$(printf "%.14d" "${PORT}")
 
-echo "--------"
-echo "opcode:    \"${the_opcode}\" (${opcode[${the_opcode}]})"
-echo "imm_flag:  ${imm_flag}"
+debug "--------"
+debug "opcode:    \"${the_opcode}\" (${opcode[${the_opcode}]})"
+debug "imm_flag:  ${imm_flag}"
 IMMEDIATE=
+
 [ ! -z "${DSTREG}" ] || IMMEDIATE="${DSTIMM}"
 [   -z "${DSTREG}" ] && DSTVAL="0000"
 [ ! -z "${SRCREG}" ] || IMMEDIATE="${SRCIMM}"
@@ -894,24 +894,24 @@ IMMEDIATE=
 [ ! -z "${DSTIMM}" ] && IMMEDIATE="${DSTIMM}"
 [ ! -z "${SRCIMM}" ] && IMMEDIATE="${SRCIMM}"
 
-[ ! -z "${DSTREG}" ] && echo "DSTREG:    ${DSTREG} (DSTVAL: ${DSTVAL})"
-[ ! -z "${DSTIMM}" ] && echo "DSTIMM:    ${DSTIMM}"
-[ ! -z "${DSTREF}" ] && echo "DSTREF:    ${DSTREF}"
-[ ! -z "${SRCREG}" ] && echo "SRCREG:    ${SRCREG} (SRCVAL: ${SRCVAL})"
-[ ! -z "${SRCIMM}" ] && echo "SRCIMM:    ${SRCIMM}"
-[ ! -z "${SRCREF}" ] && echo "SRCREF:    ${SRCREF}"
-echo "ADDRMODE:  0b${ADDRMODE}"
-echo "PORT:      0b${PORT}"
-echo "--------"
-echo "instruction: ${opcode[${the_opcode}]} ${imm_flag} ${DSTVAL} ${SRCVAL} ${ADDRMODE} ${PORT}"
+[ ! -z "${DSTREG}" ] && debug "DSTREG:    ${DSTREG} (DSTVAL: ${DSTVAL})"
+[ ! -z "${DSTIMM}" ] && debug "DSTIMM:    ${DSTIMM}"
+[ ! -z "${DSTREF}" ] && debug "DSTREF:    ${DSTREF}"
+[ ! -z "${SRCREG}" ] && debug "SRCREG:    ${SRCREG} (SRCVAL: ${SRCVAL})"
+[ ! -z "${SRCIMM}" ] && debug "SRCIMM:    ${SRCIMM}"
+[ ! -z "${SRCREF}" ] && debug "SRCREF:    ${SRCREF}"
+
+debug    "ADDRMODE:  0b${ADDRMODE}"
+debug    "PORT:      0b${PORT}"
+debug    "--------"
+debug -n "instruction: ${opcode[${the_opcode}]} ${imm_flag} ${DSTVAL} "
+debug -H "${SRCVAL} ${ADDRMODE} ${PORT}"
+
 binary="${opcode[${the_opcode}]}${imm_flag}${DSTVAL}${SRCVAL}${ADDRMODE}${PORT}"
 instruction=$(echo   "obase=10; ibase=2; ${binary}" | bc -q)
 instruction=$(printf "0x%.8X" "${instruction}")
-echo "instruction: ${instruction}"
-if [ ! -z "${IMMEDIATE}" ]; then
-    echo "immediate:   ${IMMEDIATE}"
-fi
 
-echo "done"
+[ ! -z "${instruction}" ] && echo "instruction: ${instruction}"
+[ ! -z "${IMMEDIATE}"   ] && echo "immediate:   ${IMMEDIATE}"
 
 exit 0
