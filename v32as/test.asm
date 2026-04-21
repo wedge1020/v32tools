@@ -1,5 +1,4 @@
 MOV R1, R2
-_PLACE:
 OUT 0x205, -1
 IADD R0, 1
 IMUL R1, 3

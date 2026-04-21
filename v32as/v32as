@@ -63,7 +63,7 @@ BINCODE=$(whereis -b bincode | cut -d' ' -f2)
 FLOATIFY="${BINCODE} -t -f "
 NEGATE="${BINCODE} -t -n -w "
 TMP=$(mktemp -p /tmp v32as.XXXX)
-BINFILE="${TMP}.bin"
+CODEFILE="${TMP}.code"
 LABELSYM="${TMP}.SYM"
 
 ########################################################################################
@@ -432,15 +432,14 @@ function parse_imm()
 
                 ########################################################################
                 ##
-                ## if alabel, check if there is already an entry within LABELSYM;
-                ## if not, append it
+                ## if a label, check if there is already an entry within LABELSYM;
+                ## if there is, obtain the offset. If not, return the label.
                 ##
                 if [ ! -z "${d_imm}" ]; then
                     l_imm="true"
                     lchk=$(cat ${LABELSYM} | egrep -o "^${d_imm}:" | wc -l)
                     if [ "${lchk}" -eq 1 ]; then
-                        laddr=$(cat ${LABELSYM} | egrep "^${d_imm}:" | cut -d':' -f2)
-                        d_imm="${laddr}"
+                        d_imm=$(cat ${LABELSYM} | egrep "^${d_imm}:" | cut -d':' -f2)
                     fi
                 fi
                 ;;
@@ -700,9 +699,9 @@ function debug()
 ##
 ## start of assembler logic
 ##
-[ "${DO_BIOS}" = "true" ] && offset=0x10000000
+[ "${DO_BIOS}" = "true" ] && OFFSET=0x10000000
 [ "${DO_BIOS}" = "true" ] && debug -H "[v32as] assembling for BIOS"
-[ "${DO_CART}" = "true" ] && offset=0x20000000
+[ "${DO_CART}" = "true" ] && OFFSET=0x20000000
 [ "${DO_CART}" = "true" ] && debug -H "[v32as] assembling for CART"
 
 ########################################################################################
@@ -737,6 +736,12 @@ else
     ##
     echo -n                                                             >  ${TMP}
 fi
+
+########################################################################################
+##
+## ensure CODEFILE exists
+##
+echo -n                                                                 >  ${CODEFILE}
 
 ########################################################################################
 ##
@@ -802,16 +807,16 @@ for file in ${DATAFILES}; do
                     the_opcode=$(echo  "${token}" | egrep -io "${OPCODE}")
                     the_opcode="${the_opcode^^}"
                     if [ -z "${opcode[${the_opcode}]}" ]; then
-                        do_error ${offset} \
+                        do_error ${OFFSET} \
                                  "${the_opcode} ${dst_operand} ${src_operand}" \
                                  "invalid instruction"
                     fi
                 else
-                    debug    "LABEL definition \"${token}\" at ${offset}"
+                    debug    "LABEL definition \"${token}\" at ${OFFSET}"
                     lchk=$(cat ${LABELSYM} | egrep -o "^${token}"  | wc -l)
-                    [ "${lchk}" -eq 0 ] && echo "${token}${offset}"    >> ${LABELSYM}
+                    [ "${lchk}" -eq 0 ] && echo "${token}${OFFSET}"    >> ${LABELSYM}
                     if [ "${lchk}" -gt 0 ]; then
-                        do_error ${offset} "${token}" "duplicate label"
+                        do_error ${OFFSET} "${token}" "duplicate label"
                     fi
                     LABELFLAG="true"
                     break
@@ -923,7 +928,7 @@ for file in ${DATAFILES}; do
         if [ ! -z "${dst_types}" ]; then
             result=$(parse_param ${dst_operand} "${dst_types}" "${dst_flags}")
             if [ "${result}" = "::::0::" ]; then
-                do_error ${offset} "${the_opcode} ${dst_operand} ${src_operand}" syntax
+                do_error ${OFFSET} "${the_opcode} ${dst_operand} ${src_operand}" syntax
             fi
             DSTREG=$(echo "${result}" | cut -d':' -f1)
             DSTVAL=$(echo "${result}" | cut -d':' -f2)
@@ -941,7 +946,7 @@ for file in ${DATAFILES}; do
         if [ ! -z "${src_types}" ]; then
             result=$(parse_param ${src_operand} "${src_types}" "${src_flags}")
             if [ "${result}" = "::::0:" ]; then
-                do_error ${offset} "${the_opcode} ${dst_operand} ${src_operand}" syntax
+                do_error ${OFFSET} "${the_opcode} ${dst_operand} ${src_operand}" syntax
             fi
             SRCREG=$(echo "${result}" | cut -d':' -f1)
             SRCVAL=$(echo "${result}" | cut -d':' -f2)
@@ -959,7 +964,7 @@ for file in ${DATAFILES}; do
         ##
         if [ "${DSTFLG}" -eq 1 ] && \
            [ "${SRCFLG}" -eq 1 ]; then
-            do_error ${offset} "${the_opcode} ${dst_operand} ${src_operand}" syntax
+            do_error ${OFFSET} "${the_opcode} ${dst_operand} ${src_operand}" syntax
             #echo "ERROR: illegal multiple immediate operands"
         fi
 
@@ -1073,8 +1078,8 @@ for file in ${DATAFILES}; do
         ##
         if [ ! -z "${the_opcode}" ]; then
             debug    "======================================================"
-            if [ ! -z "${offset}" ]; then
-                debug    "offset:        ${offset}"
+            if [ ! -z "${OFFSET}" ]; then
+                debug    "OFFSET:        ${OFFSET}"
                 debug    "------------------------------------------------------"
             fi
             debug    "the_opcode:    \"${the_opcode}\" (0b${opcode[${the_opcode}]})"
@@ -1130,13 +1135,13 @@ for file in ${DATAFILES}; do
         ## any immediate data to STDOUT
         ##
         if [ "${BINARY}" = "false" ] && [ "${VERBOSE}" = "false" ]; then
-            [ ! -z "${offset}"      ] && echo    "offset:      ${offset}"
+            [ ! -z "${OFFSET}"      ] && echo    "OFFSET:      ${OFFSET}"
             [ ! -z "${instruction}" ] && echo    "instruction: ${instruction}"
             [ ! -z "${IMMEDIATE}"   ] && echo    "immediate:   ${IMMEDIATE}"
             echo "-----------------------"
         else
-            echo "${instruction}"                                       >> ${TMP}
-            [ ! -z "${IMMEDIATE}" ] && echo "${IMMEDIATE}"              >> ${TMP}
+            echo "${instruction}"                                       >> ${CODEFILE}
+            [ ! -z "${IMMEDIATE}" ] && echo "${IMMEDIATE}"              >> ${CODEFILE}
         fi
 
         ################################################################################
@@ -1149,22 +1154,45 @@ for file in ${DATAFILES}; do
 
         ################################################################################
         ##
-        ## adjust offset (if offsets are being kept)
+        ## adjust OFFSET (if offsets are being kept)
         ##
-        if [ ! -z "${offset}" ]; then
-            offset=$(echo "obase=16; ibase=16; ${offset}+1" | tr -d 'x' | bc)
+        if [ ! -z "${OFFSET}" ]; then
+            OFFSET=$(echo "obase=16; ibase=16; ${OFFSET}+1" | tr -d 'x' | bc)
             if [ ! -z "${IMMEDIATE}" ]; then
-                offset=$(echo "obase=16; ibase=16; ${offset}+1" | tr -d 'x' | bc)
+                OFFSET=$(echo "obase=16; ibase=16; ${OFFSET}+1" | tr -d 'x' | bc)
             fi
-            offset=$(printf "0x%.8X" "0x${offset}")
+            OFFSET=$(printf "0x%.8X" "0x${OFFSET}")
         fi
     done
 done
 
 ########################################################################################
 ##
+## second pass: ensure all labels are replaced with offsets
+##
+echo "LABELSYM:" 1>&2
+cat ${LABELSYM}  1>&2
+for entry in `cat ${LABELSYM}`; do
+    label=$(echo  "${entry}" | cut -d':' -f1)
+    offset=$(echo "${entry}" | cut -d':' -f2)
+
+    cat ${CODEFILE} | sed "s/${label}/${offset}/g"                      >  ${TMP}
+    cat ${TMP}                                                          >  ${CODEFILE}
+done
+
+########################################################################################
+##
+## third pass: if binary output, process all the data
+##
+for offset in `cat ${CODEFILE}`; do
+	echo "offset: ${offset}" 1>&2
+    [ "${BINARY}" = "true" ] && ${BINCODE} -w ${offset}
+done
+
+########################################################################################
+##
 ## remove all generated temporary files
 ##
-rm -f ${TMP} ${LABELSYM} ${BINFILE}
+rm -f ${TMP} ${CODEFILE} ${LABELSYM}
 
 exit 0
