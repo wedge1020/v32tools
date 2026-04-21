@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#/usr/bin/env bash
 ### 
 ###      v32pp - bash-based Vircon32 assembly language preprocessor
 ### 
@@ -8,16 +8,26 @@
 ### ==========   ==================================================
 ###   noblanks - filter out blank lines
 ### nocomments - filter out comments
+###   prettify - spruce up code with column alignment
 ###    verbose - enable increased verbosity
 ###       help - display this help and exit
+### 
+### This preprocessor supports the following directives:
+### 
+###     %include - load file contents in place
+###     %define  - define symbol, replace with value
+###     %eval    - like define, but will do simple math
+###     %ifdef   - single-level preprocessor if defined
+###     %ifndef  - single-level preprocessor if not defined
+###     %endif   - close the preprocessor if block
 ### 
 ### NOTE: v32pp does not modify the original source file, and it
 ###       will currently  just display the resulting data,  that
 ###       which is post-processed, to STDOUT
 ### 
-##############################################################################
+########################################################################################
 
-##############################################################################
+########################################################################################
 ##
 ## Process command-line arguments
 ##
@@ -25,50 +35,53 @@ DO_HELP=$(echo "${*}" | egrep -qio '\<help\>' && echo "true" || echo "false")
 VERBOSE=$(echo "${*}" | egrep -qio '\<verbos' && echo "true" || echo "false")
 NOBLANK=$(echo "${*}" | egrep -qio '\<noblan' && echo "true" || echo "false")
 COMMENT=$(echo "${*}" | egrep -qio '\<nocomm' && echo "true" || echo "false")
+PRETTY=$(echo  "${*}" | egrep -qio '\<prett'  && echo "true" || echo "false")
 
-##############################################################################
+########################################################################################
 ##
 ## Display usage information if requested (and exit)
 ##
 [ "${DO_HELP}" = "true" ] && cat ${0} | grep '^### ' | tr -d '#' && exit 0
 
-##############################################################################
+########################################################################################
 ##
 ## declare variables
 ##
-SRC="${1}"
+REGEX='\<(help|verbos|noblan|nocomm|prett)[^ ]*\>'
+ARGS=$(echo "${*}" | tr ' ' '\n' | egrep -v "${REGEX}")
+SRC="${ARGS}"
 CFG=$(mktemp -p /tmp preprocessor.XXXX)
 SYM=$(mktemp -p /tmp preprocessor.XXXX)
 TMP=$(mktemp -p /tmp preprocessor.XXXX)
 ASM="${TMP}.asm"
 
-##############################################################################
+########################################################################################
 ##
 ## ensure the CFG and TMP temporary files are empty
 ##
-echo -n                                                            >  ${CFG}
-echo -n                                                            >  ${SYM}
-echo -n                                                            >  ${TMP}
+echo -n                                                                      >  ${CFG}
+echo -n                                                                      >  ${SYM}
+echo -n                                                                      >  ${TMP}
 
-##############################################################################
+########################################################################################
 ##
 ## make backup copy
 ##
-cat ${SRC}                                                         >  ${ASM}
+cat ${SRC}                                                                   >  ${ASM}
 
-##############################################################################
+########################################################################################
 ##
 ## process %include directives
 ##
 incchk=$(cat ${ASM} | grep '%include' | wc -l)
 while [ "${incchk}" -gt 0 ]; do
     REGEX='^.*\%include  *"\([^"]*\)".*$'
-    cat ${ASM} | sed "s/${REGEX}/include(\1)/g"                    >  ${TMP}
-    cat ${TMP} | m4                                                >  ${ASM}
+    cat ${ASM} | sed "s/${REGEX}/include(\1)/g"                              >  ${TMP}
+    cat ${TMP} | m4                                                          >  ${ASM}
     incchk=$(cat ${ASM} | grep '%include' | wc -l)
 done
 
-##############################################################################
+########################################################################################
 ##
 ## process %ifdef directives - will likely only work for one, no nested ifs
 ##
@@ -77,11 +90,11 @@ if [ "${ifchk}" -gt 0 ]; then
 
     REGEX='^.*\%ifdef  *\([A-Za-z_][A-Za-z0-9_]*\).*$'
 
-    cat ${ASM} | sed "s/${REGEX}/ifdef(\`\1\',\`/g"                >  ${TMP}
-    cat ${TMP} | sed "s/^.*\%endif.*$/\',)dnl/g"                   >  ${ASM}
+    cat ${ASM} | sed "s/${REGEX}/ifdef(\`\1\',\`/g"                          >  ${TMP}
+    cat ${TMP} | sed "s/^.*\%endif.*$/\',)dnl/g"                             >  ${ASM}
 fi
 
-##############################################################################
+########################################################################################
 ##
 ## process %ifndef directives - will likely only work for one, no nested ifs
 ##
@@ -90,55 +103,126 @@ if [ "${ifchk}" -gt 0 ]; then
 
     REGEX='^.*\%ifndef  *\([A-Za-z_][A-Za-z0-9_]*\).*$'
 
-    cat ${ASM} | sed "s/${REGEX}/ifdef(\`\1\',,\`/g"               >  ${TMP}
-    cat ${TMP} | sed "s/^.*\%endif.*$/\')dnl/g"                    >  ${ASM}
+    cat ${ASM} | sed "s/${REGEX}/ifdef(\`\1\',,\`/g"                         >  ${TMP}
+    cat ${TMP} | sed "s/^.*\%endif.*$/\')dnl/g"                              >  ${ASM}
 fi
 
-##############################################################################
+########################################################################################
 ##
 ## process simple %define symbols
 ##
 REGEX='^.*\%define  *\([^ ]*\)  *\([^/]*\).*$'
-cat ${ASM} | grep    "${REGEX}" | sed "s/${REGEX}/define(\1,\2)/g" >  ${CFG}
-cat ${ASM} | grep -v "${REGEX}"                                    >  ${TMP}
-cat ${TMP}                                                         >  ${ASM}
+cat ${ASM} | grep    "${REGEX}" | sed "s/${REGEX}/define(\1,\2)/g"           >  ${CFG}
+cat ${ASM} | grep -v "${REGEX}"                                              >  ${TMP}
+cat ${TMP}                                                                   >  ${ASM}
 
-##############################################################################
+########################################################################################
 ##
-## process math %define symbols
+## %eval: define allowing for basic math in the replacement value
 ##
-REGEX='^.*\define[(]\([^)]*\),\(.*[+-][^)]*\)[)]$'
-cat ${CFG} | sed "s/${REGEX}/define(\1,eval(\2))/g"                >  ${TMP}
-cat ${TMP}                                                         >  ${CFG}
+## use: %eval SYMBOL XSYM+YSYM
+##
+REGEX='^.*\eval[(]\([^)]*\),\(.*[+-][^)]*\)[)]$'
+cat ${CFG} | sed "s/${REGEX}/define(\1,eval(\2))/g"                          >  ${TMP}
+cat ${TMP}                                                                   >  ${CFG}
 
-##############################################################################
+########################################################################################
 ##
 ## process even simpler %define symbols (just symbol, no value)
 ##
 REGEX='^.*\%define  *\([^ ]*\)$'
-cat ${ASM} | sed "s/${REGEX}/define(\1,1)/g"                       >  ${TMP}
-cat ${TMP}                                                         >  ${ASM}
+cat ${ASM} | sed "s/${REGEX}/define(\1,1)/g"                                 >  ${TMP}
+cat ${TMP}                                                                   >  ${ASM}
 
-##############################################################################
+########################################################################################
 ##
 ## remove all comments from the file
 ##
 if [ "${COMMENT}" = "true" ]; then
-    cat ${ASM} | sed 's/;.*$//g'                                   >  ${TMP}
-    cat ${TMP}                                                     >  ${ASM}
+    cat ${ASM} | sed 's/;.*$//g'                                             >  ${TMP}
+    cat ${TMP}                                                               >  ${ASM}
 fi
 
-##############################################################################
+########################################################################################
+##
+## code prettification
+##
+if [ "${PRETTY}" = "true" ]; then
+	echo "HERE"
+    cat ${CFG} ${ASM} | m4                                                   >  ${TMP}
+    cat ${TMP}                                                               >  ${ASM}
+    echo -n                                                                  >  ${TMP}
+    for entry in $(cat ${ASM} | tr ' ' '^'); do
+
+        ################################################################################
+        ##
+        ## reformat entry for predictable processing
+        ##
+        line=$(echo   "${entry}"  | tr '^' ' ')
+
+        ################################################################################
+        ##
+        ## assembly directive: string
+        ##
+        string=$(echo "${line}"   | grep -io '^[^;]*string' | grep -io '".*"')
+        [ ! -z "${string}" ] && echo "    string ${string}"                  >> ${TMP}
+        [ ! -z "${string}" ] && continue
+
+        ################################################################################
+        ##
+        ## reformat line no longer needing to worry about string constants
+        ##
+        line=$(echo "${line}" | tr -s ' ' | sed 's/^  *//g')
+
+        echo "${line}" | grep '^;' && continue
+
+        ################################################################################
+        ##
+        ## for instructions, break out potential tokens
+        ##
+        opcode=$(echo   "${line}" | cut -d' ' -f1)
+        dst_oper=$(echo "${line}" | cut -d' ' -f2)
+        src_oper=$(echo "${line}" | cut -d' ' -f3)
+        comment=$(echo  "${line}" | cut -d' ' -f4-)
+
+#echo "[opcode]   ${opcode}"
+#echo "[dst_oper] ${dst_oper}"
+#echo "[src_oper] ${src_oper}"
+#echo "[comment]  ${comment}"
+
+        ################################################################################
+        ##
+        ## labels are left-aligned
+        ##
+        lchk=$(echo "${line}" | egrep -io '_[A-Z0-9_]+:')
+        [ ! -z "${lchk}" ] && echo "${lchk}"                                 >> ${TMP}
+        [ ! -z "${lchk}" ] && continue                                       >> ${TMP}
+
+        ################################################################################
+        ##
+        ## typical line of code
+        ##
+        printf "    %-5s %-20s %-16s %s\n" "${opcode}"   \
+                                           "${dst_oper}" \
+                                           "${src_oper}" \
+                                           "${comment}"                      >> ${TMP}
+    done
+    cat ${TMP}
+fi
+
+########################################################################################
 ##
 ## display the processed file to STDOUT, potentially removing blank lines
 ##
-if [ "${NOBLANK}" = "true" ]; then
-    cat ${CFG} ${ASM} | m4 | grep -v '^ *$'
-else
-    cat ${CFG} ${ASM} | m4
+if [ "${PRETTY}" = "false" ]; then
+    if [ "${NOBLANK}" = "true" ]; then
+        cat ${CFG} ${ASM} | m4 | grep -v '^ *$'
+    else
+        cat ${CFG} ${ASM} | m4
+    fi
 fi
 
-##############################################################################
+########################################################################################
 ##
 ## remove all temporary files
 ##
