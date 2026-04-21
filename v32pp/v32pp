@@ -8,7 +8,6 @@
 ### ==========   ==================================================
 ###   noblanks - filter out blank lines
 ### nocomments - filter out comments
-###   prettify - spruce up code with column alignment
 ###    verbose - enable increased verbosity
 ###       help - display this help and exit
 ### 
@@ -35,7 +34,6 @@ DO_HELP=$(echo "${*}" | egrep -qio '\<help\>' && echo "true" || echo "false")
 VERBOSE=$(echo "${*}" | egrep -qio '\<verbos' && echo "true" || echo "false")
 NOBLANK=$(echo "${*}" | egrep -qio '\<noblan' && echo "true" || echo "false")
 COMMENT=$(echo "${*}" | egrep -qio '\<nocomm' && echo "true" || echo "false")
-PRETTY=$(echo  "${*}" | egrep -qio '\<prett'  && echo "true" || echo "false")
 
 ########################################################################################
 ##
@@ -47,7 +45,7 @@ PRETTY=$(echo  "${*}" | egrep -qio '\<prett'  && echo "true" || echo "false")
 ##
 ## declare variables
 ##
-REGEX='\<(help|verbos|noblan|nocomm|prett)[^ ]*\>'
+REGEX='\<(help|verbos|noblan|nocomm)[^ ]*\>'
 ARGS=$(echo "${*}" | tr ' ' '\n' | egrep -v "${REGEX}")
 SRC="${ARGS}"
 CFG=$(mktemp -p /tmp preprocessor.XXXX)
@@ -145,81 +143,12 @@ fi
 
 ########################################################################################
 ##
-## code prettification
-##
-if [ "${PRETTY}" = "true" ]; then
-	echo "HERE"
-    cat ${CFG} ${ASM} | m4                                                   >  ${TMP}
-    cat ${TMP}                                                               >  ${ASM}
-    echo -n                                                                  >  ${TMP}
-    for entry in $(cat ${ASM} | tr ' ' '^'); do
-
-        ################################################################################
-        ##
-        ## reformat entry for predictable processing
-        ##
-        line=$(echo   "${entry}"  | tr '^' ' ')
-
-        ################################################################################
-        ##
-        ## assembly directive: string
-        ##
-        string=$(echo "${line}"   | grep -io '^[^;]*string' | grep -io '".*"')
-        [ ! -z "${string}" ] && echo "    string ${string}"                  >> ${TMP}
-        [ ! -z "${string}" ] && continue
-
-        ################################################################################
-        ##
-        ## reformat line no longer needing to worry about string constants
-        ##
-        line=$(echo "${line}" | tr -s ' ' | sed 's/^  *//g')
-
-        echo "${line}" | grep '^;' && continue
-
-        ################################################################################
-        ##
-        ## for instructions, break out potential tokens
-        ##
-        opcode=$(echo   "${line}" | cut -d' ' -f1)
-        dst_oper=$(echo "${line}" | cut -d' ' -f2)
-        src_oper=$(echo "${line}" | cut -d' ' -f3)
-        comment=$(echo  "${line}" | cut -d' ' -f4-)
-
-#echo "[opcode]   ${opcode}"
-#echo "[dst_oper] ${dst_oper}"
-#echo "[src_oper] ${src_oper}"
-#echo "[comment]  ${comment}"
-
-        ################################################################################
-        ##
-        ## labels are left-aligned
-        ##
-        lchk=$(echo "${line}" | egrep -io '_[A-Z0-9_]+:')
-        [ ! -z "${lchk}" ] && echo "${lchk}"                                 >> ${TMP}
-        [ ! -z "${lchk}" ] && continue                                       >> ${TMP}
-
-        ################################################################################
-        ##
-        ## typical line of code
-        ##
-        printf "    %-5s %-20s %-16s %s\n" "${opcode}"   \
-                                           "${dst_oper}" \
-                                           "${src_oper}" \
-                                           "${comment}"                      >> ${TMP}
-    done
-    cat ${TMP}
-fi
-
-########################################################################################
-##
 ## display the processed file to STDOUT, potentially removing blank lines
 ##
-if [ "${PRETTY}" = "false" ]; then
-    if [ "${NOBLANK}" = "true" ]; then
-        cat ${CFG} ${ASM} | m4 | grep -v '^ *$'
-    else
-        cat ${CFG} ${ASM} | m4
-    fi
+if [ "${NOBLANK}" = "true" ]; then
+    cat ${CFG} ${ASM} | m4 | grep -v '^ *$'
+else
+    cat ${CFG} ${ASM} | m4
 fi
 
 ########################################################################################

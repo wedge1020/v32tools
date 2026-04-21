@@ -34,7 +34,6 @@ be redirected to a file, or piped into `v32as` for assembly):
  ==========   ==================================================
    noblanks - filter out blank lines
  nocomments - filter out comments
-   prettify - spruce up code with column alignment
     verbose - enable increased verbosity
        help - display this help and exit
 
