@@ -710,6 +710,12 @@ fi
 
 ########################################################################################
 ##
+## ensure TMP exists
+##
+echo -n                                                                 >  ${TMP}
+
+########################################################################################
+##
 ## ensure LABELSYM exists
 ##
 echo -n                                                                 >  ${LABELSYM}
@@ -1086,6 +1092,9 @@ for file in ${DATAFILE}; do
             [ ! -z "${instruction}" ] && echo    "instruction: ${instruction}"
             [ ! -z "${IMMEDIATE}"   ] && echo    "immediate:   ${IMMEDIATE}"
             echo "-----------------------"
+        else
+            echo "${instruction}"                                       >> ${TMP}
+            [ ! -z "${IMMEDIATE}" ] && echo "${IMMEDIATE}"              >> ${TMP}
         fi
 
         ################################################################################

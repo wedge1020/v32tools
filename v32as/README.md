@@ -23,6 +23,8 @@ something needing to be done multiple times a second.
               bios   assemble for BIOS
               cart   assemble for CART
               none   standalone instruction assembly (default)
+              step   pause after each instruction
+            binary   output resulting binary machine code to STDOUT
            verbose   increase verbosity
               help   display usage information and exit
 
