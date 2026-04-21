@@ -44,6 +44,19 @@ ARGS=$(echo    "${ARGS}" | grep -v '^[ ]*$')
 
 ########################################################################################
 ##
+## Terminal colors via tput
+##
+black=$(tput  setaf 0) # Black
+red=$(tput    setaf 1) # Red
+green=$(tput  setaf 2) # Green
+yellow=$(tput setaf 3) # Yellow
+blue=$(tput   setaf 4) # Blue
+purple=$(tput setaf 5) # Purple
+cyan=$(tput   setaf 6) # Cyan
+white=$(tput  setaf 7) # White
+
+########################################################################################
+##
 ## Declare and initialize variables
 ##
 BINCODE=$(whereis -b bincode | cut -d' ' -f2)
@@ -583,7 +596,7 @@ function parse_param()
         esac
     done
 
-    ################################################################################
+    ####################################################################################
     ##
     ## For register transactions, also determine its numeric value (SRCVAL)
     ##
@@ -591,7 +604,7 @@ function parse_param()
         pVAL=$(getregnum "${pREG}")
     fi
 
-    ################################################################################
+    ####################################################################################
     ##
     ## Display the results
     ##
@@ -605,8 +618,8 @@ function do_error()
     [ ! -z "${offset}" ] && shift 1
 
     opcode=$(echo      "${1}" | cut -d' ' -f1)
-    dst_operand=$(echo "${1}" | cut -d' ' -f2)
-    src_operand=$(echo "${1}" | cut -d' ' -f3)
+    dst_operand=$(echo "${1}" | cut -d' ' -f2 -s)
+    src_operand=$(echo "${1}" | cut -d' ' -f3 -s)
     error_type="${2}"
 
     [   -z "${error_type}" ] && error_type="invalid use"
@@ -694,7 +707,7 @@ function debug()
 
 ########################################################################################
 ##
-## Check for STDIN redirection, 
+## Check for STDIN redirection
 ##
 if [   -z "${ARGS}" ]; then
 
@@ -703,16 +716,27 @@ if [   -z "${ARGS}" ]; then
     ## polish input on its way to the input file
     ##
     cat | tr -s ' ' | sed 's/ ,/,/g' | sed 's/;.*$//g'                  >  ${TMP}
-    DATAFILE="${TMP}"
-else
-    DATAFILE="${ARGS}"
-fi
+    DATAFILES="${TMP}"
+
+    ####################################################################################
+    ##
+    ## step mode makes no sense in STDIN mode (single shot)
+    ##
+    DO_STEP="false"
 
 ########################################################################################
 ##
-## ensure TMP exists
+## ... otherwise read from the files specified on the command-line
 ##
-echo -n                                                                 >  ${TMP}
+else
+    DATAFILES="${ARGS}"
+
+    ####################################################################################
+    ##
+    ## ensure TMP exists
+    ##
+    echo -n                                                             >  ${TMP}
+fi
 
 ########################################################################################
 ##
@@ -724,7 +748,15 @@ echo -n                                                                 >  ${LAB
 ##
 ## process for each input file
 ##
-for file in ${DATAFILE}; do
+for file in ${DATAFILES}; do
+
+    ####################################################################################
+    ##
+    ## verify that the input file exists and can be read
+    ##
+    if [ ! -r "${file}" ]; then
+        do_error "${file}" "unable to read"
+    fi
 
     ####################################################################################
     ##
@@ -779,7 +811,7 @@ for file in ${DATAFILE}; do
                     lchk=$(cat ${LABELSYM} | egrep -o "^${token}"  | wc -l)
                     [ "${lchk}" -eq 0 ] && echo "${token}${offset}"    >> ${LABELSYM}
                     if [ "${lchk}" -gt 0 ]; then
-                        do_error ${offset} " " "duplicate label ${token}"
+                        do_error ${offset} "${token}" "duplicate label"
                     fi
                     LABELFLAG="true"
                     break
@@ -794,12 +826,21 @@ for file in ${DATAFILE}; do
         done
         let num_operands=num_operands-1
 
-        ############################################################################
+        ################################################################################
         ##
         ## if we are dealing with a label definition, avoid further instruction
         ## processing
         ##
         if [ "${LABELFLAG}" = "true" ]; then
+
+            ############################################################################
+            ##
+            ## if single step is enabled: pause for confirmation
+            ##
+            [ "${DO_STEP}" = "true" ] && read -e confirmation
+            [ "${DO_STEP}" = "true" ] && \
+            [ "${VERBOSE}" = "true" ] && clear
+
             continue
         fi
  
@@ -875,7 +916,7 @@ for file in ${DATAFILE}; do
                 ;;
         esac
 
-        ############################################################################
+        ################################################################################
         ##
         ## If available, process the destination operand
         ##
@@ -1026,7 +1067,7 @@ for file in ${DATAFILE}; do
         instruction=$(echo   "obase=10; ibase=2; ${binary}" | bc -q)
         instruction=$(printf "0x%.8X" "${instruction}")
 
-        ############################################################################
+        ################################################################################
         ##
         ## report on the instruction being processed
         ##
@@ -1060,8 +1101,9 @@ for file in ${DATAFILE}; do
             debug    "------------------------------------------------------"
             debug    "PORT:          0b${PORT}"
             debug    "======================================================"
-            debug -n "instruction:   ${opcode[${the_opcode}]} ${imm_flag} ${DSTVAL} "
-            debug -H "${SRCVAL} ${ADDR} ${PORT}"
+            debug -n "instruction:   ${red}${opcode[${the_opcode}]}"
+            debug -n -H "${yellow}${imm_flag} ${green}${DSTVAL} "
+            debug -H "${cyan}${SRCVAL} ${blue}${ADDR} ${purple}${PORT}${white}"
             hexalign="${opcode[${the_opcode}]}${imm_flag}${DSTVAL}"
             hexalign="${hexalign}${SRCVAL}${ADDR}${PORT}"
             debug -n "instruction:   "
@@ -1102,6 +1144,7 @@ for file in ${DATAFILE}; do
         ## if single step is enabled: pause for confirmation
         ##
         [ "${DO_STEP}" = "true" ] && read -e confirmation
+        [ "${DO_STEP}" = "true" ] && \
         [ "${VERBOSE}" = "true" ] && clear
 
         ################################################################################
