@@ -21,7 +21,7 @@ STDOUT when done.
 
      options - description
   ==========   =====================================================
-    noblanks - filter out blank lines
+    noblanks - filter out excessive blank lines
   nocomments - filter out comments
      verbose - enable increased verbosity
         help - display this help and exit

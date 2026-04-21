@@ -6,7 +6,7 @@
 ### 
 ###     options - description
 ###  ==========   =====================================================
-###    noblanks - filter out blank lines
+###    noblanks - filter out excessive blank lines
 ###  nocomments - filter out comments
 ###     verbose - enable increased verbosity
 ###        help - display this help and exit
@@ -128,14 +128,13 @@ for SRC in ${FILELIST}; do
                                            "${src_oper}" \
                                            "${comment}"                      >> ${TMP}
     done
-    cat ${TMP}
 
     ####################################################################################
     ##
     ## display the processed file to STDOUT, potentially removing blank lines
     ##
     if [ "${NOBLANK}" = "true" ]; then
-        cat ${ASM} | grep -v '^ *$'
+        cat ${ASM} | tr '\n' '@' | sed 's/@@@*/@@/g' | tr '@' '\n'
     else
         cat ${ASM}
     fi
