@@ -1,0 +1,150 @@
+#/usr/bin/env bash
+### 
+### v32prettify - bash-based Vircon32 assembly language code prettifier
+### 
+###        usage: prettify [ASMFILE..]
+### 
+###     options - description
+###  ==========   =====================================================
+###    noblanks - filter out blank lines
+###  nocomments - filter out comments
+###     verbose - enable increased verbosity
+###        help - display this help and exit
+### 
+###  NOTE: prettify does not modify the original source file, and
+###        it will currently just display the  resulting data  to 
+###        STDOUT
+### 
+########################################################################################
+
+########################################################################################
+##
+## Process command-line arguments
+##
+DO_HELP=$(echo "${*}" | egrep -qio '\<help\>' && echo "true" || echo "false")
+VERBOSE=$(echo "${*}" | egrep -qio '\<verbos' && echo "true" || echo "false")
+NOBLANK=$(echo "${*}" | egrep -qio '\<noblan' && echo "true" || echo "false")
+COMMENT=$(echo "${*}" | egrep -qio '\<nocomm' && echo "true" || echo "false")
+
+########################################################################################
+##
+## Display usage information if requested (and exit)
+##
+[ "${DO_HELP}" = "true" ] && cat ${0} | grep '^### ' | tr -d '#' && exit 0
+
+########################################################################################
+##
+## declare variables
+##
+REGEX='\<(help|verbos|noblan|nocomm)[^ ]*\>'
+FILELIST=$(echo "${*}" | tr ' ' '\n' | egrep -v "${REGEX}")
+TMP=$(mktemp -p /tmp v32prettify.XXXX)
+ASM="${TMP}.asm"
+
+########################################################################################
+##
+## process for each file specified
+##
+for SRC in ${FILELIST}; do
+
+    ####################################################################################
+    ##
+    ## ensure the TMP temporary file is empty
+    ##
+    echo -n                                                                  >  ${TMP}
+
+    ####################################################################################
+    ##
+    ## make backup copy
+    ##
+    cat ${SRC}                                                               >  ${ASM}
+
+    ####################################################################################
+    ##
+    ## remove all comments from the file
+    ##
+    if [ "${COMMENT}" = "true" ]; then
+        cat ${ASM} | sed 's/;.*$//g'                                         >  ${TMP}
+        cat ${TMP}                                                           >  ${ASM}
+    fi
+
+    ####################################################################################
+    ##
+    ## code prettification
+    ##
+    echo -n                                                                  >  ${TMP}
+    for entry in $(cat ${ASM} | tr ' ' '^'); do
+
+        ################################################################################
+        ##
+        ## reformat entry for predictable processing
+        ##
+        line=$(echo   "${entry}"  | tr '^' ' ')
+
+        ################################################################################
+        ##
+        ## assembly directive: string
+        ##
+        string=$(echo "${line}"   | grep -io '^[^;]*string' | grep -io '".*"')
+        [ ! -z "${string}" ] && echo "    string ${string}"                  >> ${TMP}
+        [ ! -z "${string}" ] && continue
+
+        ################################################################################
+        ##
+        ## reformat line no longer needing to worry about string constants
+        ##
+        line=$(echo "${line}" | tr -s ' ' | sed 's/^  *//g')
+
+        echo "${line}" | grep '^;' && continue
+
+        ################################################################################
+        ##
+        ## for instructions, break out potential tokens
+        ##
+        opcode=$(echo   "${line}" | cut -d' ' -f1)
+        dst_oper=$(echo "${line}" | cut -d' ' -f2)
+        src_oper=$(echo "${line}" | cut -d' ' -f3)
+        comment=$(echo  "${line}" | cut -d' ' -f4-)
+
+#echo "[opcode]   ${opcode}"
+#echo "[dst_oper] ${dst_oper}"
+#echo "[src_oper] ${src_oper}"
+#echo "[comment]  ${comment}"
+
+        ################################################################################
+        ##
+        ## labels are left-aligned
+        ##
+        lchk=$(echo "${line}" | egrep -io '_[A-Z0-9_]+:')
+        [ ! -z "${lchk}" ] && echo "${lchk}"                                 >> ${TMP}
+        [ ! -z "${lchk}" ] && continue                                       >> ${TMP}
+
+        ################################################################################
+        ##
+        ## typical line of code
+        ##
+        printf "    %-5s %-20s %-16s %s\n" "${opcode}"   \
+                                           "${dst_oper}" \
+                                           "${src_oper}" \
+                                           "${comment}"                      >> ${TMP}
+    done
+    cat ${TMP}
+
+    ####################################################################################
+    ##
+    ## display the processed file to STDOUT, potentially removing blank lines
+    ##
+    if [ "${NOBLANK}" = "true" ]; then
+        cat ${ASM} | grep -v '^ *$'
+    else
+        cat ${ASM}
+    fi
+done
+
+########################################################################################
+##
+## remove all temporary files
+##
+rm -f ${ASM} ${TMP}
+
+exit 0
