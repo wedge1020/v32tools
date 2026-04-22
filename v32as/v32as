@@ -1181,8 +1181,6 @@ done
 ##
 ## second pass: ensure all labels are replaced with offsets
 ##
-echo "LABELSYM:" 1>&2
-cat ${LABELSYM}  1>&2
 for entry in `cat ${LABELSYM}`; do
     label=$(echo  "${entry}" | cut -d':' -f1)
     offset=$(echo "${entry}" | cut -d':' -f2)
@@ -1195,10 +1193,10 @@ done
 ##
 ## third pass: if binary output, process all the data
 ##
-for offset in `cat ${CODEFILE}`; do
-    echo "offset: ${offset}" 1>&2
-    [ "${BINARY}" = "true" ] && ${BINCODE} -w ${offset}
-done
+${BINCODE} -F ${CODEFILE}
+#for offset in `cat ${CODEFILE}`; do
+#    [ "${BINARY}" = "true" ] && ${BINCODE} -w ${offset}
+#done
 
 ########################################################################################
 ##
