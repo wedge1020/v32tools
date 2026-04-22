@@ -7,6 +7,7 @@ tools and programs to accomplish, all integrated within one program.
 It features:
 
   * display integer as binary data (`--offset` or `--word`)
+  * read text file of integers as binary data, one per line (`--file`)
   * display string as binary data (`--string`)
   * display float as binary data (`--float`)
   * decode base64-encoded data (`--decode-base64`)

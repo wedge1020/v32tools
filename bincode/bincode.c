@@ -71,8 +71,10 @@ union f2i
 
 int  main (int  argc, char **argv)
 {
+    FILE   *datafile                      = NULL;
     size_t  ilen                          = 0;
     size_t  olen                          = 0;
+    char   *filename                      = NULL;
     char   *string                        = NULL;
     char   *string_arg                    = NULL;
     char   *string_data                   = NULL;
@@ -87,6 +89,7 @@ int  main (int  argc, char **argv)
         { "header",        no_argument,       0, 'H' },
         { "offset",        required_argument, 0, 'o' },
         { "word",          required_argument, 0, 'w' },
+        { "file",          required_argument, 0, 'F' },
         { "float",         required_argument, 0, 'f' },
         { "string",        required_argument, 0, 's' },
         { "decode-base64", no_argument,       0, 'd' },
@@ -101,7 +104,7 @@ int  main (int  argc, char **argv)
     };
 
     opt                                   = getopt_long (argc, argv,
-                                                         "Ho:w:f:s:deEnNtvh",
+                                                         "Ho:w:F:f:s:deEnNtvh",
                                                          long_options,
                                                          &option_index);
 
@@ -118,6 +121,13 @@ int  main (int  argc, char **argv)
             case 'o':
                 mode                      = mode | MODE_OFFSET;
                 value.i32                 = strtol (optarg, NULL, 16);
+                break;
+
+            case 'F':
+                mode                      = mode | MODE_WORD;
+                ilen                      = strlen (optarg) + 1;
+                filename                  = (char *) malloc (sizeof (char) * ilen);
+                strcpy (filename, optarg);
                 break;
 
             case 'f':
@@ -162,6 +172,7 @@ int  main (int  argc, char **argv)
                 fprintf (stdout, "  -H, --header         show \"V32-TEXT\" header\n");
                 fprintf (stdout, "  -o, --offset VALUE   process VALUE as offset\n");
                 fprintf (stdout, "  -w, --word   VALUE   process VALUE as dataword\n");
+                fprintf (stdout, "  -F, --file   FILE    read datawords from FILE\n");
                 fprintf (stdout, "  -f, --float  VALUE   process VALUE as float\n");
                 fprintf (stdout, "  -s, --string \"VALUE\" process VALUE as string\n");
                 fprintf (stdout, "  -d, --decode-base64  perform base64 decoding\n");
@@ -175,13 +186,38 @@ int  main (int  argc, char **argv)
                 fprintf (stdout, "Verbosity will disable any binary output\n");
                 fprintf (stdout, "Text will be like verbosity without noise\n");
                 fprintf (stdout, "Strings by default with display an offset\n\n");
-                exit (0);
+                exit    (0);
                 break;
         }
         opt                               = getopt_long (argc, argv,
-                                                         "Ho:w:f:s:deEnNtvh",
+                                                         "Ho:w:F:f:s:deEnNtvh",
                                                          long_options,
                                                          &option_index);
+    }
+
+    if (filename                         != NULL)
+    {
+        datafile                          = fopen (filename, "r");
+        if (datafile                     == NULL)
+        {
+            fprintf (stderr, "ERROR: could not open '%s' for reading!", filename);
+            exit    (1);
+        }
+
+        ilen                              = sizeof (char) * 11;
+        string                            = (char *) malloc (ilen);
+
+        fgets (string, 11, datafile);
+        while (!feof (datafile))
+        {
+            fgetc (datafile);
+            value.i32                     = strtol (string, NULL, 16);
+            process_offset (mode, value.i32);
+            fgets (string, 11, datafile);
+        }
+
+        fclose (datafile);
+        exit   (0);
     }
 
     ////////////////////////////////////////////////////////////////////////////////////
