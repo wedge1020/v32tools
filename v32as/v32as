@@ -89,6 +89,7 @@ GPUCMDSYM='GPU(Command|BlendingMode)_[A-Z][A-Za-z]*'
 SNDCMDSYM='SPU(Command|ChannelState)_[A-Z][A-Za-z]*'
 IOPORTCMDHEX='0[Xx][1-4][0-5]'
 IOPORT="${IOPORTSYM}|${IOPORTHEX}"
+DIRECTIVE='integer|string|float|pointer|datafile'
 LABEL='_[_A-Za-z0-9][_A-Za-z0-9]*'
 OPERAND="(${DEREF}|${REGISTER}|${IMMEDIATE}|${IOPORT}|${LABEL})"
 
@@ -706,6 +707,16 @@ function debug()
 
 ########################################################################################
 ##
+## if BINARY is enabled, ensure one of BIOS or CART mode is enabled
+##
+if [ "${BINARY}"  = "true"  ] && \
+   [ "${DO_BIOS}" = "false" ] && \
+   [ "${DO_CART}" = "false" ]; then
+    do_error "binary output" "must enable BIOS or CART mode"
+fi
+
+########################################################################################
+##
 ## Check for STDIN redirection
 ##
 if [   -z "${ARGS}" ]; then
@@ -1185,7 +1196,7 @@ done
 ## third pass: if binary output, process all the data
 ##
 for offset in `cat ${CODEFILE}`; do
-	echo "offset: ${offset}" 1>&2
+    echo "offset: ${offset}" 1>&2
     [ "${BINARY}" = "true" ] && ${BINCODE} -w ${offset}
 done
 
