@@ -89,7 +89,7 @@ GPUCMDSYM='GPU(Command|BlendingMode)_[A-Z][A-Za-z]*'
 SNDCMDSYM='SPU(Command|ChannelState)_[A-Z][A-Za-z]*'
 IOPORTCMDHEX='0[Xx][1-4][0-5]'
 IOPORT="${IOPORTSYM}|${IOPORTHEX}"
-DIRECTIVE='integer|string|float|pointer|datafile'
+DIRECTIVE='integer|string|float|pointer|datafile|zstring'
 LABEL='_[_A-Za-z0-9][_A-Za-z0-9]*'
 OPERAND="(${DEREF}|${REGISTER}|${IMMEDIATE}|${IOPORT}|${LABEL})"
 
@@ -407,15 +407,15 @@ function parse_imm()
                 ;;
 
             "hex1")
-                d_imm=$(echo "${token}" | egrep -o "^${HEX1}$")
+                d_imm=$(echo "${token}" | egrep -io "^${HEX1}$")
                 d_imm="${d_imm//0[Xx]/}"
-                t_imm=$(echo "${token}" | egrep -o "^${HEX1}$" | wc -l)
+                t_imm=$(echo "${token}" | egrep -io "^${HEX1}$" | wc -l)
                 ;;
 
             "hex2")
-                d_imm=$(echo "${token}" | egrep -o "^${HEX2}$")
+                d_imm=$(echo "${token}" | egrep -io "^${HEX2}$")
                 d_imm="${d_imm//[Hh]/}"
-                t_imm=$(echo "${token}" | egrep -o "^${HEX2}$" | wc -l)
+                t_imm=$(echo "${token}" | egrep -io "^${HEX2}$" | wc -l)
                 ;;
 
             "float")
@@ -801,6 +801,7 @@ for file in ${DATAFILES}; do
         instruction=
         IMMEDIATE=
         LABELFLAG="false"
+        DIRECTIVEFLAG="false"
 
         line_input=$(echo "${line}" | tr '@' ' ')
         line_input=$(echo  "${line_input}" | tr -s ' ')       # excessive spaces
@@ -812,9 +813,23 @@ for file in ${DATAFILES}; do
         num_operands=0
         for token in `echo "${line_input}" | tr -d ','`; do
 
+            ############################################################################
+            ##
+            ## average case: isolate into pertinent variables the individual 
+            ## tokens for further instruction processing. Edge cases are to
+            ## be detected on the first token, being a label definition or an
+            ## assembler data directive
+            ##
             if [ "${num_operands}" -eq 0 ]; then
-                label_check=$(echo "${token}" | egrep -io "^${LABEL}:$")
-                if [ -z "${label_check}" ]; then
+                label_check=$(echo    "${token}" | egrep -io "^${LABEL}:$")
+                data_directive=$(echo "${token}" | egrep -io "^${DIRECTIVE}$")
+
+                ########################################################################
+                ##
+                ## average case: an instruction
+                ##
+                if [ -z "${label_check}"     ] && \
+                   [ -z "${data_directive}" ]; then
                     the_opcode=$(echo  "${token}" | egrep -io "${OPCODE}")
                     the_opcode="${the_opcode^^}"
                     if [ -z "${opcode[${the_opcode}]}" ]; then
@@ -822,6 +837,50 @@ for file in ${DATAFILES}; do
                                  "${the_opcode} ${dst_operand} ${src_operand}" \
                                  "invalid instruction"
                     fi
+
+                ########################################################################
+                ##
+                ## ... else if we have a match on a data directive, process that
+                ##
+                elif [ ! -z "${data_directive}" ] && \
+                     [   -z "${label_check}"     ]; then
+                    debug    "data directive \"${token}\" at ${OFFSET}"
+
+                    case "${data_directive}" in
+                        "integer"|"float"|"pointer")
+                            for entry in $(echo "${line_input}" | tr -d ','); do
+                                if [ "${entry}" = "${data_directive}" ]; then
+                                    continue
+                                fi
+                                debug "entry >${entry}<"
+                                value=$(parse_imm "${entry}")
+                                echo "${value}"                         >> ${CODEFILE}
+                                debug "integer ${value}"
+                            done
+                            ;;
+
+                        "string")
+                            string=$(echo "${line_input}" | cut -d' ' -f2- | tr -d '"')
+                            len=$(echo   "${value}"      | wc -c)
+                            for entry in $(${BINCODE} -N -t -s "${string}"); do
+                                value=$(parse_imm "0x${entry}")
+                                echo "${value}"                         >> ${CODEFILE}
+                            done
+                            ;;
+
+                        "zstring")
+                            ;;
+
+                        "datafile")
+                            ;;
+                    esac
+                    DIRECTIVEFLAG="true"
+                    break
+
+                ########################################################################
+                ##
+                ## ... otherwise we have a label, process that
+                ##
                 else
                     debug    "LABEL definition \"${token}\" at ${OFFSET}"
                     lchk=$(cat ${LABELSYM} | egrep -o "^${token}"  | wc -l)
@@ -844,10 +903,11 @@ for file in ${DATAFILES}; do
 
         ################################################################################
         ##
-        ## if we are dealing with a label definition, avoid further instruction
-        ## processing
+        ## if we are dealing with a label definition or data directive,
+        ## avoid further instruction processing
         ##
-        if [ "${LABELFLAG}" = "true" ]; then
+        if [ "${LABELFLAG}"     = "true" ] || \
+           [ "${DIRECTIVEFLAG}" = "true" ]; then
 
             ############################################################################
             ##
@@ -919,9 +979,9 @@ for file in ${DATAFILES}; do
             
             "MOV")
                 dst_types="immediate register indexed"
-                dst_flags="deref"
+                dst_flags="deref label"
                 src_types="immediate register indexed"
-                src_flags="deref"
+                src_flags="deref label"
                 ;;
             
             *)
@@ -956,6 +1016,8 @@ for file in ${DATAFILES}; do
         ##
         if [ ! -z "${src_types}" ]; then
             result=$(parse_param ${src_operand} "${src_types}" "${src_flags}")
+			#echo "src_operand: ${src_operand}, ${src_types}, ${src_flags}" 1>&2
+			#echo "result@${OFFSET}: ${result}" 1>&2
             if [ "${result}" = "::::0:" ]; then
                 do_error ${OFFSET} "${the_opcode} ${dst_operand} ${src_operand}" syntax
             fi
@@ -1193,7 +1255,10 @@ done
 ##
 ## third pass: if binary output, process all the data
 ##
-${BINCODE} -F ${CODEFILE}
+${BINCODE} -N -w 0x5633322d
+${BINCODE} -N -w 0x5642494e
+${BINCODE} -N -w 0xDEADBEEF
+${BINCODE} -e -F ${CODEFILE}
 #for offset in `cat ${CODEFILE}`; do
 #    [ "${BINARY}" = "true" ] && ${BINCODE} -w ${offset}
 #done
