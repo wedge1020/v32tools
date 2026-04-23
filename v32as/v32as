@@ -87,11 +87,12 @@ IOPORTSYM='(TIM|RNG|GPU|SPU|INP|CAR|MEM)_[A-Z][A-Za-z]*'
 IOPORTHEX='0[Xx][0-6][01][0-9A-F]'
 GPUCMDSYM='GPU(Command|BlendingMode)_[A-Z][A-Za-z]*'
 SNDCMDSYM='SPU(Command|ChannelState)_[A-Z][A-Za-z]*'
+IOPORTCMDSYM="${GPUCMDSYM}|${SNDCMDSYM}"
 IOPORTCMDHEX='0[Xx][1-4][0-5]'
 IOPORT="${IOPORTSYM}|${IOPORTHEX}"
 DIRECTIVE='integer|string|float|pointer|datafile|zstring'
 LABEL='_[_A-Za-z0-9][_A-Za-z0-9]*'
-OPERAND="(${DEREF}|${REGISTER}|${IMMEDIATE}|${IOPORT}|${LABEL})"
+OPERAND="(${DEREF}|${REGISTER}|${IMMEDIATE}|${IOPORT}|${IOPORTCMDSYM}|${LABEL})"
 
 declare -A ITYPE
 ITYPE["hex1"]="^${HEX1}$"
@@ -362,7 +363,7 @@ function parse_imm()
     ##
     ## check each potential category to validate data as immediate
     ##
-    for attr in bin oct dec1 dec2 hex1 hex2 float ${label}; do
+    for attr in bin oct dec1 dec2 hex1 hex2 float ioportcmd ${label}; do
 
         case "${attr}" in
             "bin")
@@ -426,6 +427,13 @@ function parse_imm()
                     d_imm="${d_imm//0x/}"
                 fi
                 ;;
+
+			"ioportcmd")
+				d_imm=$(parse_ioc "${token}")
+				d_imm="${d_imm//0x/}"
+				t_imm=$(echo "${d_imm}" | wc -l)
+                ;;
+
 
             "label")
                 d_imm=$(echo "${token}" | egrep -o "^${LABEL}$")
@@ -497,8 +505,28 @@ function parse_iop()
     [ ! -z "${portchk}" ] && portnum="${IOPORT[${portname}]}"
     [   -z "${portchk}" ] && numchk=$(echo "${portname}" | egrep -o "^${IOPORTHEX}$")
     [ ! -z "${numchk}"  ] && portnum="${portname}"
-    #[   -z "${portnum}" ] && portnum="${IOPORTCMD[${portname}]}"
-    #[   -z "${portnum}" ] && portnum=$(echo "${portname}" | egrep -o "${IOPORTCMDHEX}$")
+
+    debug "portname:  ${portname}" 1>&2
+    debug "portnum:   ${portnum}"  1>&2
+
+    echo "${portnum}"
+}
+
+########################################################################################
+##
+## parse_ioc(): function to parse and return the hex address of the  provided
+##              V32 IOPort Command
+##
+function parse_ioc()
+{
+    portname="${1}"
+    portnum=
+    portchk=$(echo "${portname}" | egrep -o "^${IOPORTCMDSYM}$")
+    numchk=
+
+    [ ! -z "${portchk}" ] && portnum="${IOPORTCMD[${portname}]}"
+    [   -z "${portchk}" ] && numchk=$(echo "${portname}" | egrep -o "^${IOPORTCMDHEX}$")
+    [ ! -z "${numchk}"  ] && portnum="${portname}"
 
     debug "portname:  ${portname}" 1>&2
     debug "portnum:   ${portnum}"  1>&2
@@ -593,6 +621,14 @@ function parse_param()
             "ioport")
                 pIOP=$(parse_iop "${operand}")
                 ;;
+
+            ############################################################################
+            ##
+            ## check for IOPort parameter (symbolic or hex numeric)
+            ##
+            #"ioportcmd")
+            #    pIOP=$(parse_ioc "${operand}")
+            #    ;;
         esac
     done
 
@@ -1016,8 +1052,8 @@ for file in ${DATAFILES}; do
         ##
         if [ ! -z "${src_types}" ]; then
             result=$(parse_param ${src_operand} "${src_types}" "${src_flags}")
-			#echo "src_operand: ${src_operand}, ${src_types}, ${src_flags}" 1>&2
-			#echo "result@${OFFSET}: ${result}" 1>&2
+            echo "src_operand: ${src_operand}, ${src_types}, ${src_flags}" 1>&2
+            echo "result@${OFFSET}: ${result}" 1>&2
             if [ "${result}" = "::::0:" ]; then
                 do_error ${OFFSET} "${the_opcode} ${dst_operand} ${src_operand}" syntax
             fi
