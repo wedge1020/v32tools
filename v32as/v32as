@@ -363,7 +363,7 @@ function parse_imm()
     ##
     ## check each potential category to validate data as immediate
     ##
-    for attr in bin oct dec1 dec2 hex1 hex2 float ioportcmd ${label}; do
+    for attr in bin oct dec1 dec2 hex1 hex2 float ${label} ioportcmd; do
 
         case "${attr}" in
             "bin")
@@ -428,10 +428,10 @@ function parse_imm()
                 fi
                 ;;
 
-			"ioportcmd")
-				d_imm=$(parse_ioc "${token}")
-				d_imm="${d_imm//0x/}"
-				t_imm=$(echo "${d_imm}" | wc -l)
+            "ioportcmd")
+                d_imm=$(parse_ioc "${token}")
+                d_imm="${d_imm//0x/}"
+                t_imm=$(echo "${d_imm}" | wc -l)
                 ;;
 
 
@@ -528,8 +528,8 @@ function parse_ioc()
     [   -z "${portchk}" ] && numchk=$(echo "${portname}" | egrep -o "^${IOPORTCMDHEX}$")
     [ ! -z "${numchk}"  ] && portnum="${portname}"
 
-    debug "portname:  ${portname}" 1>&2
-    debug "portnum:   ${portnum}"  1>&2
+    #debug "portname:  ${portname}" 1>&2
+    #debug "portnum:   ${portnum}"  1>&2
 
     echo "${portnum}"
 }
@@ -549,9 +549,9 @@ function parse_param()
     pFLG=0
     pREF=
 
-   # debug    "operand:    ${operand}"    1>&2
-   # debug    "categories: ${categories}" 1>&2
-   # debug    "flags:      ${flags}"      1>&2
+    #debug    "operand:    ${operand}"
+    #debug    "categories: ${categories}"
+    #debug    "flags:      ${flags}"
 
     ####################################################################################
     ##
@@ -599,7 +599,9 @@ function parse_param()
             ## the components
             ##
             "indexed")
-                [ -z "${pREF}"  ] && do_error ${offset} ${line_input} "invalid indexing use"
+                if [ -z "${pREF}"  ]; then
+                    do_error ${offset} ${line_input} "invalid indexing use"
+                fi
                 chk=$(echo       "${operand}" | egrep -o "^${INDEXED}$" | wc -l)
                 if [ "${chk}" -eq 1 ]; then
                     delim=$(echo "${operand}" | grep -o '[+]')
@@ -621,14 +623,6 @@ function parse_param()
             "ioport")
                 pIOP=$(parse_iop "${operand}")
                 ;;
-
-            ############################################################################
-            ##
-            ## check for IOPort parameter (symbolic or hex numeric)
-            ##
-            #"ioportcmd")
-            #    pIOP=$(parse_ioc "${operand}")
-            #    ;;
         esac
     done
 
@@ -645,6 +639,7 @@ function parse_param()
     ## Display the results
     ##
     echo     "${pREG}:${pVAL}:${pIMM}:${pREF}:${pFLG}:${pIOP}:${label}"
+    #debug    "${pREG}:${pVAL}:${pIMM}:${pREF}:${pFLG}:${pIOP}:${label}"
 }
 
 function do_error()
@@ -979,10 +974,10 @@ for file in ${DATAFILES}; do
                 ;;
 
             "JT"|"JF")
-                dst_types="immediate register"
-                dst_flags="label"
-                src_types="register"
-                src_flags=
+                dst_types="register"
+                dst_flags=
+                src_types="immediate register"
+                src_flags="label"
                 ;;
 
             "PUSH"|"POP"|"CMPS"|"CIF"|"CFI"|"CIB"|"CFB"|"NOT"|"BNOT"|"ISGN"|"IABS")
@@ -1052,9 +1047,6 @@ for file in ${DATAFILES}; do
         ##
         if [ ! -z "${src_types}" ]; then
             result=$(parse_param ${src_operand} "${src_types}" "${src_flags}")
-            echo "src_operand: ${src_operand}, ${src_types}, ${src_flags}" 1>&2
-			echo "[input] ${line_input}"       1>&2
-            echo "result@${OFFSET}: ${result}" 1>&2
             if [ "${result}" = "::::0:" ]; then
                 do_error ${OFFSET} "${the_opcode} ${dst_operand} ${src_operand}" syntax
             fi
@@ -1154,7 +1146,7 @@ for file in ${DATAFILES}; do
         ##
         [ ! -z "${DSTPRT}" ] && DSTPRT=$(echo "${DSTPRT}" | tr -d 'x')
         [ ! -z "${DSTPRT}" ] && PORT=$(echo "obase=2; ibase=16; ${DSTPRT}" | bc)
-        [ ! -z "${SRCPRT}" ] && DSTPRT=$(echo "${SRCPRT}" | tr -d 'x')
+        [ ! -z "${SRCPRT}" ] && SRCPRT=$(echo "${SRCPRT}" | tr -d 'x')
         [ ! -z "${SRCPRT}" ] && PORT=$(echo "obase=2; ibase=16; ${SRCPRT}" | bc)
         [   -z "${PORT}"   ] && PORT="0"
 
@@ -1294,7 +1286,7 @@ done
 ##
 ${BINCODE} -N -w 0x5633322d
 ${BINCODE} -N -w 0x5642494e
-${BINCODE} -N -w 0xDEADBEEF
+${BINCODE} -N -w 0x9b000000
 ${BINCODE} -e -F ${CODEFILE}
 #for offset in `cat ${CODEFILE}`; do
 #    [ "${BINARY}" = "true" ] && ${BINCODE} -w ${offset}
