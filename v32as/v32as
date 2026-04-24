@@ -1053,6 +1053,7 @@ for file in ${DATAFILES}; do
         if [ ! -z "${src_types}" ]; then
             result=$(parse_param ${src_operand} "${src_types}" "${src_flags}")
             echo "src_operand: ${src_operand}, ${src_types}, ${src_flags}" 1>&2
+			echo "[input] ${line_input}"       1>&2
             echo "result@${OFFSET}: ${result}" 1>&2
             if [ "${result}" = "::::0:" ]; then
                 do_error ${OFFSET} "${the_opcode} ${dst_operand} ${src_operand}" syntax
