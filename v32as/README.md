@@ -28,15 +28,20 @@ something needing to be done multiple times a second.
            verbose   increase verbosity
               help   display usage information and exit
 
- NOTE: It is meant for v32pp, the Vircon32 Assembly Pre-Processor, to be
- run prior to passing the code through this assembler. Furthermore,  for
- the production of an actual VBIN file, a further tool is required. This
- assembler will ONLY convert to machine code, and nothing more.
+ NOTE:  It   is  meant   for  v32pp,   the  v32tools   Vircon32  Assembly
+ Pre-Processor,  to  be  run  prior  to passing  the  code  through  this
+ assembler. Furthermore,  for the  production of an  actual VBIN  file, a
+ further tool  is required. This  assembler will ONLY convert  to machine
+ code, and nothing more.
 ```
 
 The assembler can take  data via STDIN, or by specifying  one or more ASM
 files on the command-line.  It will process them one at  a time, in order
-of specification.
+of specification, and output the combined results to STDOUT.
+
+Note that,  having the  preprocessor be a  separate tool,  `v32as` cannot
+handle ANY preprocessor  directives in its input.  Things like `%include`
+and `%define`, when encountered, will result in errors being triggered.
 
 ## BUILDING
 
@@ -50,12 +55,13 @@ In order for `v32as` to run, you will need the following:
 ### BINCODE
 
 You need  to build and install  the `bincode` tool, also  from within the
-`v32tools` suite.
+`v32tools` suite. This  tool will do the actual generation  of the binary
+data; the `v32as` script proper generates purely text data.
 
 ### BC
 
 Many numerical  manipulations are  mathematically performed via  the `bc`
-"binary calculator" tool.
+"binary calculator" tool. Typically used for base conversions.
 
 ### STANDARD UNIX TOOLS
 
