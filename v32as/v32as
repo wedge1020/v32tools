@@ -500,11 +500,11 @@ function parse_iop()
 {
     portname="${1}"
     portnum=
-    portchk=$(echo "${portname}" | egrep -o "^${IOPORTSYM}$")
+    portchk=$(echo "${portname}" | egrep -io "^${IOPORTSYM}$")
     numchk=
 
     [ ! -z "${portchk}" ] && portnum="${IOPORT[${portname}]}"
-    [   -z "${portchk}" ] && numchk=$(echo "${portname}" | egrep -o "^${IOPORTHEX}$")
+    [   -z "${portchk}" ] && numchk=$(echo "${portname}" | egrep -io "^${IOPORTHEX}$")
     [ ! -z "${numchk}"  ] && portnum="${portname}"
 
     debug "portname:  ${portname}" 1>&2
