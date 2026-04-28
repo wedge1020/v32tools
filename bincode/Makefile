@@ -11,12 +11,11 @@ debug: DEBUG = debug
 debug: $(SRC) $(BIN)
 
 .c:
-	@mkdir -p ../bin
-	$(CC)  $(INC) -o ../bin/$@ $< $(CFLAGS) $(LIBS)
+	$(CC)  $(INC) -o $@ $< $(CFLAGS) $(LIBS)
 
 install:
 	@mkdir -p /home/$(USER)/bin
-	@cp -av ../bin/* /home/$(USER)/bin/
+	@cp -av $(BIN) /home/$(USER)/bin/
 
 clean:
-	@rm -vf .*.sw[op] *.save* *~ ../bin/* core errors
+	@rm -vf .*.sw[op] *.save* *~ $(BIN) core errors
