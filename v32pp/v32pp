@@ -134,7 +134,18 @@ cat ${TMP}                                                                   >  
 
 ########################################################################################
 ##
-## remove all comments from the file
+## remove all comments from the CFG file (within m4 directives, then in general)
+##
+if [ "${COMMENT}" = "true" ]; then
+    cat ${CFG} | sed 's/;.*)$/)/g'                                           >  ${TMP}
+    cat ${TMP}                                                               >  ${CFG}
+    cat ${CFG} | sed 's/;.*$//g'                                             >  ${TMP}
+    cat ${TMP}                                                               >  ${CFG}
+fi
+
+########################################################################################
+##
+## remove all comments from the ASM file
 ##
 if [ "${COMMENT}" = "true" ]; then
     cat ${ASM} | sed 's/;.*$//g'                                             >  ${TMP}
