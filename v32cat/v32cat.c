@@ -1736,7 +1736,7 @@ void  decode (uint32_t word, uint32_t immediate_value)
         {
             if (addrmode       == 7)
             {
-                fprintf (stdout, "R%hhu+", srcreg);
+                fprintf (stdout, "R%hhu+", dstreg);
             }
 
             // print out `immediate_value`
