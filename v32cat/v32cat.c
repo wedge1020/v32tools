@@ -212,7 +212,9 @@ int32_t  main (int argc, char **argv)
                 token              = strtok (NULL,   "-");
                 bound              = strtol ((char *) token, NULL, 16);
 
-                for (index = offset; index <= bound; index++)
+                for (index         = offset;
+					 index        <= bound;
+					 index         = index + 1)
                 {
                     add_node (index);
                 }
