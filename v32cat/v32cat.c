@@ -213,8 +213,8 @@ int32_t  main (int argc, char **argv)
                 bound              = strtol ((char *) token, NULL, 16);
 
                 for (index         = offset;
-					 index        <= bound;
-					 index         = index + 1)
+                     index        <= bound;
+                     index         = index + 1)
                 {
                     add_node (index);
                 }
@@ -1800,14 +1800,6 @@ void  decode (uint32_t word, uint32_t immediate_value)
         else if (addrmode      >= 5)
         {
             flag                = 2;
-        }
-    }
-    else if (opcode            == 0x18) // OUT special case (only if immflag is set)
-    {
-        if (immflag            == 1)
-        {
-            fprintf (stdout, "[");
-            flag                = 1;
         }
     }
 
