@@ -71,23 +71,23 @@ int32_t  main (int32_t  argc, uint8_t **argv)
     //
     // Process DPad axes
     //
-    for (index                   = 1;
-         index                  <= 4;
-         index                   = index + 1)
+    for (index         = 1;
+         index        <= 4;
+         index         = index + 1)
     {
         switch (index)
         {
             case 1: // up
             case 2: // down
-                dpad             = (packet+YAXIS);
+                dpad   = (packet+YAXIS);
                 break;
 
             case 3: // left
             case 4: // right
-                dpad             = (packet+XAXIS);
+                dpad   = (packet+XAXIS);
                 break;
         }
-        *dpad  = (atoi (*(argv+index))) ? (255 - ((index % 2) * 255)) : *dpad;
+        *dpad          = (atoi (*(argv+index))) ? (255 - ((index % 2) * 255)) : *dpad;
     }
 
     ////////////////////////////////////////////////////////////////////////////////////
@@ -95,19 +95,20 @@ int32_t  main (int32_t  argc, uint8_t **argv)
     // Convert arguments into individual button states, and pack the BUTTONS
     // packet byte
     //
-    for (index                   = 5;
-         index                  <= 12;
-         index                   = index + 1)
+    for (index         = 5;
+         index        <= 12;
+         index         = index + 1)
     {
-        *inputs                 |= (atoi (*(argv+index)) << pos);
-        pos                      = pos   - 1;
+        *inputs       |= (atoi (*(argv+index)) << pos);
+        pos            = pos   - 1;
     }
 
     ////////////////////////////////////////////////////////////////////////////////////
     //
     // Display the states of each D-pad axis
     //
-    fprintf (stdout, "[dpad] X-axis: %.2X, Y-axis: %.2X\n", *(packet+XAXIS), *(packet+YAXIS));
+    fprintf (stdout,          "[dpad] X-axis: %.2X, Y-axis: %.2X\n",
+             *(packet+XAXIS), *(packet+YAXIS));
 
     ////////////////////////////////////////////////////////////////////////////////////
     //
@@ -127,9 +128,9 @@ int32_t  main (int32_t  argc, uint8_t **argv)
     //
     // Send the inputs
     //
-    for (index        = 0;
-         index       <  10;
-         index        = index + 1)
+    for (index         = 0;
+         index        <  10;
+         index         = index + 1)
     {
         ////////////////////////////////////////////////////////////////////////////////
         //
