@@ -28,7 +28,7 @@
 // distinct keys recognized as input.  This is more than enough to handle
 // a standard 104-key keyboard.
 //
-// The aim is for the eventually obtained key value (keyval) to map to  a
+// The aim is for the eventually-obtained key value (keyval) to map to  a
 // region of the BIOS font for output,  or just to check for a particular
 // key being pressed.
 //
@@ -171,30 +171,34 @@ v32key *v32kbd_getkey (v32kbd *keyboard)
 //
 bool v32kbd_probe (v32kbd *keyboard)
 {
-//////////////////////////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////////////////
     //
     // Declare and initialize local variables
     //
-    bool    result          = false;
-    int     keyval          = 0;
-    int     port            = 0x000;
-    int     state           = 0;
-    int    *time            = NULL;
-    v32key *key             = NULL;
+    bool     result                = false;
+    int      index                 = 0;
+    int      keyval                = 0;
+    int      port                  = 0x000;
+    int      offset                = 0;
+    int [48] routine;                  // custom routine
+    int      shift                 = 0;
+    int      state                 = 0;
+    int     *time                  = NULL;
+    v32key  *key                   = NULL;
 
     //////////////////////////////////////////////////////////////////////////
     //
     // Only process for an established keyboard instance
     //
-    if (keyboard           != NULL)
+    if (keyboard                  != NULL)
     {
         //////////////////////////////////////////////////////////////////////
         //
         // Check that enough time has elapsed (current frame must be above
         // that of the last frame the keyboard input was processed)
         //
-        state               = get_frame_counter ();
-        if (state          >  keyboard -> lastread)
+        state                      = get_frame_counter ();
+        if (state                 >  keyboard -> lastread)
         {
             //////////////////////////////////////////////////////////////////
             //
@@ -205,47 +209,67 @@ bool v32kbd_probe (v32kbd *keyboard)
             //////////////////////////////////////////////////////////////////
             //
             // Cycle through the gamepad buttons via ports in assembly;
-            // the hex values for the ports are used instead of  names,
-            // so that they can be iterated through with a loop
+            // due to how the compiler processes inline assembly, we're
+            // generating an in-RAM custom routine with exactly what is
+            // needed to generate a byte of data.
             //
-            for (port       = 0x406;  // INP_GamepadButtonStart
-                 port      <= 0x40C;  // INP_GamepadButtonR
-                 port       = port + 1)
+            // The routine array elements need to be packed  backwards,
+            // due to being on the stack
+            //
+            routine[47]            = 0x54000000;        // PUSH R0
+            routine[46]            = 0x54200000;        // PUSH R1
+            routine[45]            = 0x54400000;        // PUSH R2
+            routine[44]            = 0x4E200000;        // MOV R1, 0
+            routine[43]            = 0x00000000;        // immediate
+            routine[42]            = 0x4C424000;        // MOV R2, R1
+            for (index             = 0;
+                 index            <  7; 
+                 index             = index + 1)
             {
-                //////////////////////////////////////////////////////////////
-                //
-                // In assembly, read the current button, storing its value
-                // into state
-                //
-                asm
-                {
-                    "in    R0,      {port}"
-                    "mov   {state}, R0"
-                }
-
-                //////////////////////////////////////////////////////////////
-                //
-                // In assembly, read the current button, storing its value
-                // into keyval,  which can  be looked  up to identify  the
-                // current key input
-                //
-                if (state  >  0) // positive means pressed
-                {
-                    keyval  = keyval | (1 << (port - 0x406));
-                }
+                offset             = 47 - ((index * 5) + 6);
+                port               = index + 6;
+                shift              = 6 - index;
+                
+                routine[offset]    = 0x5C000400 | port; // IN  R0, port
+                routine[offset-1]  = 0x24040000;        // IGT R0, R2
+                routine[offset-2]  = 0x96000000;        // SHL R0, shift
+                routine[offset-3]  = shift;             // immediate value
+                routine[offset-4]  = 0x88200000;        // OR  R1, R0
             }
 
+            offset                 = 47 - (index * 5) + 6;
+            routine[offset]        = 0x4E034000;        // MOV [keyval], R1
+            routine[offset-1]      = (int) &keyval;
+            routine[offset-2]      = 0x58400000;        // POP R2
+            routine[offset-3]      = 0x58200000;        // POP R1
+            routine[offset-4]      = 0x58000000;        // POP R0
+            routine[offset-5]      = 0x10000000;        // RET
+            routine[offset-6]      = 0x00000000;        // HLT (for safety)
+                
+            //////////////////////////////////////////////////////////////////
+            //
+            // Call the routine
+            //
+            offset                 = (int) &routine[47];
+            asm
+            {
+                "PUSH  R0"
+                "MOV   R0, {offset}"
+                "CALL  R0"
+                "POP   R0"
+            }
+            
             //////////////////////////////////////////////////////////////////
             //
             // If keyval is positive, a key has been pressed
             //
-            if (keyval     >  0)
+            if (keyval            >  0)
             {
-                key         = v32key_newkey (keyval);
+                key                = v32key_newkey (keyval);
                 v32kbd_addkey (keyboard, key);
-                time        = &(keyboard -> lastread);
-                *time       = get_frame_counter ();
-                result      = true;
+                time               = &(keyboard -> lastread);
+                *time              = get_frame_counter ();
+                result             = true;
             }
         }
     }
