@@ -68,7 +68,7 @@ ZERODELAY ENCODER board is working with 5v, but of course: verifying this
 is important.
 
 Okay, so after grabbing a voltmeter and doing some reading, it seems that
-the button ports are using a pull-down circuitry- about 0.68v is measured
+the button ports are using a "pull-up" circuitry- about 0.68v is measured
 when the button isn't pressed, then will drop to 0.00v when the button is
 pressed.
 
@@ -105,7 +105,11 @@ desired button modulation.
 We have liftoff!
 
 So, I will  need to concoct something  with 7 S8050 transistors  and 7 1K
-ohm resistors. That'll look a bit messy, but it'll work.
+ohm resistors. That'll look a bit  messy, but it'll work. And yes: messy.
+I now  have seven of  these button circuits,  enough to attempt  a viable
+v32kbd test.
 
 I wonder if  there's a way to wire up  transistors and resistors in-line,
-without needing a breadboaard?
+without needing a breadboaard? The answer: use the female jumpers.
+
+Now, to adapt getkey.c to use wiringpi.
