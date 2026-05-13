@@ -162,12 +162,21 @@ int32_t  main (int32_t  argc, char **argv)
     //
     int8_t  *short_opts              = (int8_t *) "hask";
     int32_t  index                   = 0;
+    int32_t  value                   = 0;
+    int32_t  mask                    = 0x40;
     int32_t  num_bytes               = 0;
     int32_t  option                  = 0;
     int32_t  print_ascii             = FALSE;
     int32_t  show_keycodes           = TRUE;
     TermIOS  new;
     uint8_t  buffer[16];
+
+    for (index           = 6;
+         index          <= 12;
+         index           = index + 1)
+    {
+        pinMode (index, OUTPUT);
+    }
 
     ////////////////////////////////////////////////////////////////////////////////////
     //
@@ -249,6 +258,19 @@ int32_t  main (int32_t  argc, char **argv)
             {
                 printf(" \t%3d 0%03o 0x%02x\n",
                        buffer[0], buffer[0], buffer[0]);
+                mask                 = 0x40;
+                for (index           = 6;
+                     index          <= 12;
+                     index           = index + 1)
+                {
+                    value            = buffer[0] & mask;
+                    if (value       >  0)
+                    {
+                        value        = HIGH;
+                    }
+                    digitalWrite (index, value);
+                    mask             = mask > 1;
+                }
             }
 
             if ((num_bytes          != 1) ||
