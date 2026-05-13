@@ -171,6 +171,8 @@ int32_t  main (int32_t  argc, char **argv)
     TermIOS  new;
     uint8_t  buffer[16];
 
+    wiringPiSetup ();
+
     for (index           = 6;
          index          <= 12;
          index           = index + 1)
@@ -269,7 +271,7 @@ int32_t  main (int32_t  argc, char **argv)
                         value        = HIGH;
                     }
                     digitalWrite (index, value);
-                    mask             = mask > 1;
+                    mask             = mask >> 1;
                 }
             }
 
