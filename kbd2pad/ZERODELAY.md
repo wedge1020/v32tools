@@ -11,6 +11,9 @@ perform the keyboard access and input breakdown.
 
 ## HARDWARE DETAILS
 
+Seems  I  have  the  `CY-822APro`,  with  silkscreened  `202201-1.0`  and
+"gamecontrolboard" listed on the back of it.
+
 While information  seems sparse, I  have obtained the  following labelled
 images which I will use for reference:
 
@@ -63,3 +66,46 @@ Before I  proceed, I need  to determine the  pinout voltages. I  know the
 Raspberry  Pi GPIOs  are 3.3v,  and  I have  reason to  believe this  USB
 ZERODELAY ENCODER board is working with 5v, but of course: verifying this
 is important.
+
+Okay, so after grabbing a voltmeter and doing some reading, it seems that
+the button ports are using a pull-down circuitry- about 0.68v is measured
+when the button isn't pressed, then will drop to 0.00v when the button is
+pressed.
+
+The wired connectors that came with  my board appear to be backwards: red
+is the ground and black is the power.
+
+After  some  playing,  I  got  a simple  circuit  figured  out  which  is
+successfully allowing the pi to control the "button".
+
+First  up, we  red (ground)  wire  is connected  to a  common ground  the
+circuit uses (connected to a ground pin on the pi).
+
+Then, the  black (power) wire  is connected to  the collector leg  of the
+transistor:
+
+![circuit1](images/USB_ZeroDelay_Encoder_circuit1.jpg)
+
+The core of the circuit is an NPN S8050 transistor, hooked up as follows:
+
+emitter (left leg when looking at flat side): connected to common ground.
+
+base (middle leg when looking at flat  side): connected to GPIO pin on pi
+via a 1K resistor.
+
+collector (right leg  when looking at flat side): connected  to the black
+(power) wire on the ZERO DELAY button port:
+
+![circuit2](images/USB_ZeroDelay_Encoder_circuit2.jpg)
+
+Setting the  GPIO pin to OUTPUT  mode, I can  then send the GPIO  HIGH or
+LOW, and  when I  run `jstest` on  the connected gamepad,  I can  see the
+desired button modulation.
+
+We have liftoff!
+
+So, I will  need to concoct something  with 7 S8050 transistors  and 7 1K
+ohm resistors. That'll look a bit messy, but it'll work.
+
+I wonder if  there's a way to wire up  transistors and resistors in-line,
+without needing a breadboaard?
