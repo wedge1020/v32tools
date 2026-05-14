@@ -269,6 +269,7 @@ int32_t  main (int32_t  argc, char **argv)
             //                 zero if some error occurred 
             //
             value                    = poll (fds, 1, timeout_ms);
+			fprintf (stdout, "[value] %d\n", value);
 
             if (value               >  0) // key pressed
             {
