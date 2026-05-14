@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no" ?>
 <rom-definition version="1.0">
     <rom type="cartridge" title="v32kbd test" version="1.0" />
-    <binary path="v32kbd.vbin" />
+	<binary path="obj/v32kbd.vbin" />
     <textures />
     <sounds />
 </rom-definition>
