@@ -22,6 +22,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <getopt.h>
+#include <poll.h>
 #include <signal.h>
 #include <fcntl.h>
 #include <termios.h>
@@ -31,6 +32,7 @@
 #include <wiringPi.h>
 
 typedef struct termios TermIOS;
+typedef struct pollfd  PollFD;
 
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -168,8 +170,13 @@ int32_t  main (int32_t  argc, char **argv)
     int32_t  option                  = 0;
     int32_t  print_ascii             = FALSE;
     int32_t  show_keycodes           = TRUE;
+    int32_t  timeout_ms              = 32;
+    PollFD   fds[1];
     TermIOS  new;
     uint8_t  buffer[16];
+
+    fds[0].fd                        = STDIN_FILENO;
+    fds[0].events                    = POLLIN;
 
     wiringPiSetup ();
 
@@ -255,23 +262,48 @@ int32_t  main (int32_t  argc, char **argv)
                  "Ctrl-D will terminate this program\n\n");
         while (1)
         {
-            num_bytes                =  read (fd, buffer, 1);
-            if (num_bytes           == 1)
+            //////////////////////////////////////////////////////////////////
+            //
+            // poll() results: greater than 0 if key is pressed, equal to
+            //                 zero if we hit the timeout, and less  than
+            //                 zero if some error occurred 
+            //
+            value                    = poll (fds, 1, timeout_ms);
+
+            if (value               >  0) // key pressed
             {
-                printf(" \t%3d 0%03o 0x%02x\n",
-                       buffer[0], buffer[0], buffer[0]);
-                mask                 = 0x40;
+                num_bytes            = read (fd, buffer, 1);
+                if (num_bytes       == 1)
+                {
+                    printf(" \t%3d 0%03o 0x%02x\n",
+                           buffer[0], buffer[0], buffer[0]);
+                    mask             = 0x40;
+                    for (index       = 6;
+                         index      <= 12;
+                         index       = index + 1)
+                    {
+                        value        = buffer[0] & mask;
+                        if (value   >  0)
+                        {
+                            value    = HIGH;
+                        }
+                        digitalWrite (index, value);
+                        mask         = mask >> 1;
+                    }
+                }
+            }
+            else if (value          == 0) // reached timeout
+            {
+                //////////////////////////////////////////////////////////////
+                //
+                // reset gamepad bits to 0. This is an attempt to simulate
+                // a momentary button press
+                //
                 for (index           = 6;
                      index          <= 12;
                      index           = index + 1)
                 {
-                    value            = buffer[0] & mask;
-                    if (value       >  0)
-                    {
-                        value        = HIGH;
-                    }
-                    digitalWrite (index, value);
-                    mask             = mask >> 1;
+                    digitalWrite (index, LOW);
                 }
             }
 
