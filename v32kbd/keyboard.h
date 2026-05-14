@@ -216,41 +216,41 @@ bool v32kbd_probe (v32kbd *keyboard)
             // The routine array elements need to be packed  backwards,
             // due to being on the stack
             //
-            routine[47]            = 0x54000000;        // PUSH R0
-            routine[46]            = 0x54200000;        // PUSH R1
-            routine[45]            = 0x54400000;        // PUSH R2
-            routine[44]            = 0x4E200000;        // MOV R1, 0
-            routine[43]            = 0x00000000;        // immediate
-            routine[42]            = 0x4C424000;        // MOV R2, R1
+            routine[0]             = 0x54000000;        // PUSH R0
+            routine[1]             = 0x54200000;        // PUSH R1
+            routine[2]             = 0x54400000;        // PUSH R2
+            routine[3]             = 0x4E200000;        // MOV R1, 0
+            routine[4]             = 0x00000000;        // immediate
+            routine[5]             = 0x4C424000;        // MOV R2, R1
             for (index             = 0;
                  index            <  7; 
                  index             = index + 1)
             {
-                offset             = 47 - ((index * 5) + 6);
+                offset             = ((index * 5) + 6);
                 port               = index + 6;
                 shift              = 6 - index;
                 
                 routine[offset]    = 0x5C000400 | port; // IN  R0, port
-                routine[offset-1]  = 0x24040000;        // IGT R0, R2
-                routine[offset-2]  = 0x96000000;        // SHL R0, shift
-                routine[offset-3]  = shift;             // immediate value
-                routine[offset-4]  = 0x88200000;        // OR  R1, R0
+                routine[offset+1]  = 0x24040000;        // IGT R0, R2
+                routine[offset+2]  = 0x96000000;        // SHL R0, shift
+                routine[offset+3]  = shift;             // immediate value
+                routine[offset+4]  = 0x88200000;        // OR  R1, R0
             }
 
-            offset                 = 47 - (index * 5) + 6;
+            offset                 = (index * 5) + 6;
             routine[offset]        = 0x4E034000;        // MOV [keyval], R1
-            routine[offset-1]      = (int) &keyval;
-            routine[offset-2]      = 0x58400000;        // POP R2
-            routine[offset-3]      = 0x58200000;        // POP R1
-            routine[offset-4]      = 0x58000000;        // POP R0
-            routine[offset-5]      = 0x10000000;        // RET
-            routine[offset-6]      = 0x00000000;        // HLT (for safety)
+            routine[offset+1]      = (int) &keyval;
+            routine[offset+2]      = 0x58400000;        // POP R2
+            routine[offset+3]      = 0x58200000;        // POP R1
+            routine[offset+4]      = 0x58000000;        // POP R0
+            routine[offset+5]      = 0x10000000;        // RET
+            routine[offset+6]      = 0x00000000;        // HLT (for safety)
                 
             //////////////////////////////////////////////////////////////////
             //
             // Call the routine
             //
-            offset                 = (int) &routine[47];
+            offset                 = (int) &routine[0];
             asm
             {
                 "PUSH  R0"
@@ -263,6 +263,7 @@ bool v32kbd_probe (v32kbd *keyboard)
             //
             // If keyval is positive, a key has been pressed
             //
+            keyval                 = 0x41; // 'A'
             if (keyval            >  0)
             {
                 key                = v32key_newkey (keyval);
