@@ -9,9 +9,10 @@ void main (void)
     int     key       = 0;
     v32kbd *keyboard  = NULL;
 
-    keyboard          = v32kbd_init (0);
+    keyboard          = v32kbd_init (1);
 
     select_texture (-1);
+    clear_screen (color_black);
     while (1)
     {
         key           = v32kbd_read (keyboard);
