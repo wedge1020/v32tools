@@ -166,11 +166,11 @@ int32_t  main (int32_t  argc, char **argv)
     int32_t  index                   = 0;
     int32_t  value                   = 0;
     int32_t  mask                    = 0x40;
-    int32_t  num_bytes               = 0;
+    int32_t  num_bytes               = 1;
     int32_t  option                  = 0;
     int32_t  print_ascii             = FALSE;
     int32_t  show_keycodes           = TRUE;
-    int32_t  timeout_ms              = 32;
+    int32_t  timeout_ms              = 48;
     PollFD   fds[1];
     TermIOS  new;
     uint8_t  buffer[16];
@@ -269,7 +269,6 @@ int32_t  main (int32_t  argc, char **argv)
             //                 zero if some error occurred 
             //
             value                    = poll (fds, 1, timeout_ms);
-			fprintf (stdout, "[value] %d\n", value);
 
             if (value               >  0) // key pressed
             {
