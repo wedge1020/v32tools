@@ -109,7 +109,7 @@ v32kbd *v32kbd_init (int  gamepad)
         keyboard -> input     = NULL;
         keyboard -> data      = NULL;
         keyboard -> gamepad   = gamepad;
-        keyboard -> lastread  = 0;
+        keyboard -> lastread  = -1;
     }
 
     return (keyboard);
