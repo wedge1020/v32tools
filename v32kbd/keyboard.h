@@ -72,12 +72,12 @@ struct v32kbd
 //
 // API: function prototypes for the functions in this library
 //
-v32key *v32key_newkey (int     keyval);                // allocate new v32key
-v32kbd *v32kbd_init   (int     gamepad);               // initialize keyboard
-int     v32kbd_addkey (v32kbd *keyboard, v32key *key); // add new key to list
-v32key *v32kbd_getkey (v32kbd *keyboard);              // obtain next key
-bool    v32kbd_probe  (v32kbd *keyboard);              // check for input
-int     v32kbd_read   (v32kbd *keyboard);              // read next input
+v32key *v32key_newkey (int      keyval);                // allocate new v32key
+v32kbd *v32kbd_init   (int      gamepad);               // initialize keyboard
+int     v32kbd_addkey (v32kbd **keyboard, v32key *key); // add new key to list
+v32key *v32kbd_getkey (v32kbd **keyboard);              // obtain next key
+bool    v32kbd_probe  (v32kbd **keyboard);              // check for input
+int     v32kbd_read   (v32kbd **keyboard);              // read next input
 
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -119,45 +119,49 @@ v32kbd *v32kbd_init (int  gamepad)
 //
 // v32kbd_addkey(): add new key input to keyboard list
 //
-int     v32kbd_addkey (v32kbd *keyboard, v32key *key)
+int     v32kbd_addkey (v32kbd **keyboard, v32key *key)
 {
-    v32key *tmp                = NULL;
+    v32key *tmp                   = NULL;
+    int     result                = 0;
 
-    if (keyboard              != NULL)
+    if (*keyboard                != NULL)
     {
-        if (keyboard -> input == NULL)
+        if ((*keyboard) -> input == NULL)
         {
-            keyboard -> input  = key;
-            keyboard -> data   = key;
-            key      -> next   = NULL;
+            (*keyboard) -> input  = key;
+            (*keyboard) -> data   = key;
+            key         -> next   = NULL;
         }
         else
         {
-            tmp                = keyboard -> data;           
-            tmp      -> next   = key;
-            keyboard -> data   = key;
+            tmp                   = (*keyboard) -> data;           
+            tmp      -> next      = key;
+            (*keyboard) -> data   = key;
         }
+        result                    = 1;
     }
+
+    return (result);
 }
 
 //////////////////////////////////////////////////////////////////////////////
 //
 // v32kbd_getkey(): obtain next key of input from the keyboard list
 //
-v32key *v32kbd_getkey (v32kbd *keyboard)
+v32key *v32kbd_getkey (v32kbd **keyboard)
 {
-    v32key *nextkey               = NULL;
+    v32key *nextkey                  = NULL;
 
-    if (keyboard                 != NULL)
+    if (*keyboard                   != NULL)
     {
-        if (keyboard -> input    != NULL)
+        if ((*keyboard) -> input    != NULL)
         {
-            nextkey               = keyboard -> input;
-            keyboard -> input     = keyboard -> input -> next;
-            nextkey  -> next      = NULL;
-            if (nextkey          == keyboard -> data)
+            nextkey                  = (*keyboard) -> input;
+            (*keyboard) -> input     = (*keyboard) -> input -> next;
+            nextkey  -> next         = NULL;
+            if (nextkey             == (*keyboard) -> data)
             {
-                keyboard -> data  = NULL;
+                (*keyboard) -> data  = NULL;
             }
         }
     }
@@ -169,7 +173,7 @@ v32key *v32kbd_getkey (v32kbd *keyboard)
 //
 // v32kbd_probe(): check for new input, updating keyboard input list
 //
-bool v32kbd_probe (v32kbd *keyboard)
+bool v32kbd_probe (v32kbd **keyboard)
 {
     //////////////////////////////////////////////////////////////////////////
     //
@@ -190,7 +194,7 @@ bool v32kbd_probe (v32kbd *keyboard)
     //
     // Only process for an established keyboard instance
     //
-    if (keyboard                  != NULL)
+    if (*keyboard                  != NULL)
     {
         //////////////////////////////////////////////////////////////////////
         //
@@ -198,13 +202,13 @@ bool v32kbd_probe (v32kbd *keyboard)
         // that of the last frame the keyboard input was processed)
         //
         state                      = get_frame_counter ();
-        if (state                 >  keyboard -> lastread)
+        if (state                 >  (*keyboard) -> lastread)
         {
             //////////////////////////////////////////////////////////////////
             //
             // Select the gamepad slot associated with the keyboard
             //
-            select_gamepad (keyboard -> gamepad);
+            select_gamepad ((*keyboard) -> gamepad);
 
             //////////////////////////////////////////////////////////////////
             //
@@ -263,12 +267,12 @@ bool v32kbd_probe (v32kbd *keyboard)
             //
             // If keyval is positive, a key has been pressed
             //
-            keyval                 = 0x41; // 'A'
+            //keyval                 = 0x41; // 'A'
             if (keyval            >  0)
             {
                 key                = v32key_newkey (keyval);
                 v32kbd_addkey (keyboard, key);
-                time               = &(keyboard -> lastread);
+                time               = &((*keyboard) -> lastread);
                 *time              = get_frame_counter ();
                 result             = true;
             }
@@ -282,25 +286,21 @@ bool v32kbd_probe (v32kbd *keyboard)
 //
 // v32kbd_read(): obtain input key from keyboard input list (if available)
 //
-int  v32kbd_read  (v32kbd *keyboard)
+int  v32kbd_read  (v32kbd **keyboard)
 {
-    bool    check                  = false;
-    int     keyval                 = 0;
-    v32key *oldkey                 = NULL;
+    bool    check                 = false;
+    int     keyval                = 0;
+    v32key *oldkey                = NULL;
 
-    if (keyboard                  != NULL)
+    if (keyboard                 != NULL)
     {
-        check                      = v32kbd_probe (keyboard);
-        if (check                 == true)
-        {
-            if (keyboard -> input != NULL)
-            {
-                oldkey             = v32kbd_getkey (keyboard);
-                keyval             = oldkey   -> value;
-                free (oldkey);
-                oldkey             = NULL;
-            }
-        }
+		if ((*keyboard) -> input != NULL)
+		{
+			oldkey                = v32kbd_getkey (keyboard);
+			keyval                = oldkey   -> value;
+			free (oldkey);
+			oldkey                = NULL;
+		}
     }
 
     return (keyval);
