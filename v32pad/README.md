@@ -59,3 +59,9 @@ Where the parameter is the desired gamepad to read (0-3).
 
 And  the return  value is  the `status  word` (the  bitpacked int  of the
 binary encoded state of the indicated gamepad's buttons).
+
+## INSTALLATION
+
+Either     copy    the     `gamepad.h`    file     into    the     system
+`Vircon32/DevTools/include/`  directory, or  into your  project's current
+directory for inclusion.
