@@ -26,7 +26,7 @@ assemble -g program obj/trigdemo.asm  -o obj/trigdemo.vbin || abort_build
 echo
 echo Convert the PNG textures
 echo --------------------------
-png2vircon textures/00_basic.png      -o obj/00_basic.vtex || abort_build
+png2vircon textures/texture.png       -o obj/texture.vtex  || abort_build
 
 #echo
 #echo Convert the WAV sounds

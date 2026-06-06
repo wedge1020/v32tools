@@ -97,6 +97,7 @@ int  gamepad_read (int gamepad_id)
     // desired gamepad to read is not connected)
     //
     int  status_word  = -1;
+	int *addr         = NULL;
 
     //////////////////////////////////////////////////////////////////////////
     //
@@ -106,6 +107,8 @@ int  gamepad_read (int gamepad_id)
     {
         gamepad_init ();
     }
+
+	addr              = routine;
 
     //////////////////////////////////////////////////////////////////////////
     //
@@ -121,7 +124,7 @@ int  gamepad_read (int gamepad_id)
         "in    R0,                  INP_GamepadConnected"
         "jf    R0,                  _skip"
             
-        "mov   R0,                  {routine}"    // obtain array address
+        "mov   R0,                  {addr}"       // obtain array address
         "call  R0"                                // call custom RAM routine
 
         "mov   {status_word},       R0"           // copy bit-packed value

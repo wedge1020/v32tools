@@ -3,7 +3,7 @@
     <rom type="cartridge" title="trigdemo" version="1.0" />
 <binary path="obj/trigdemo.vbin" />
 <textures>
-    <texture path="obj/00_basic.vtex" />
+    <texture path="obj/texture.vtex" />
 </textures>
 <sounds />
 </rom-definition>
