@@ -35,7 +35,7 @@ void gamepad_init ()
     routine[index++]  = 0x4E800000; // mov   R4, immediate
     routine[index++]  = 0x00000000; // immediate value
     routine[index++]  = 0x4E400000; // mov   R2, immediate
-    routine[index++]  = 0x5C000400; // immediate value
+    routine[index++]  = 0x5C400400; // immediate value (IN R2, 0x400))
     routine[index++]  = 0x88420000; // or    R2, R1
     routine[index++]  = 0x4E05C000; // mov   [R0+immediate], R2
     routine[index++]  = 0x00000013; // immediate value
@@ -97,7 +97,7 @@ int  gamepad_read (int gamepad_id)
     // desired gamepad to read is not connected)
     //
     int  status_word  = -1;
-	int *addr         = NULL;
+    int *addr         = NULL;
 
     //////////////////////////////////////////////////////////////////////////
     //
@@ -108,7 +108,7 @@ int  gamepad_read (int gamepad_id)
         gamepad_init ();
     }
 
-	addr              = routine;
+    addr              = routine;
 
     //////////////////////////////////////////////////////////////////////////
     //
