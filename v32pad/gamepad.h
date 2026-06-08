@@ -71,10 +71,10 @@ void gamepad_init ()
 // Status word layout is as follows:
 //
 //  * bits 31-11: unused (there are only 11 inputs per gamepad)
-//  * bit 10: state of the UP button
-//  * bit 9: state of the DOWN button
-//  * bit 8: state of the LEFT button
-//  * bit 7: state of the RIGHT button
+//  * bit 10: state of the LEFT button
+//  * bit 9: state of the RIGHT button
+//  * bit 8: state of the UP button
+//  * bit 7: state of the DOWN button
 //  * bit 6: state of the START button
 //  * bit 5: state of the A button
 //  * bit 4: state of the B button
@@ -103,7 +103,7 @@ int  gamepad_read (int gamepad_id)
     //
     // if machine code routine has not been initialized, do so now
     //
-    if (routine[15]  != 0x5C000400)
+    if (routine[15]  != 0x5C400400)
     {
         gamepad_init ();
     }
@@ -132,6 +132,8 @@ int  gamepad_read (int gamepad_id)
         "_skip:"
         "pop   R0"
     }
+
+    return (status_word);
 }
 
 #endif
