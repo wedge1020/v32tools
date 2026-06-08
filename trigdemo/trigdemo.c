@@ -7,10 +7,10 @@
 #define  BACKGROUND   0
 #define  SPRITE       5
 #define  PIXEL        6
-#define  UP           1024
-#define  DOWN         512
-#define  LEFT         256
-#define  RIGHT        128
+#define  LEFT         1024
+#define  RIGHT        512
+#define  UP           256
+#define  DOWN         128
 #define  START        64
 #define  A            32
 #define  B            16
@@ -18,10 +18,10 @@
 #define  Y            4
 #define  L            2
 #define  R            1
-#define  UP_PRESS     2048
-#define  DOWN_PRESS   1536
-#define  LEFT_PRESS   1280
-#define  RIGHT_PRESS  1152
+#define  LEFT_PRESS   2048
+#define  RIGHT_PRESS  1536
+#define  UP_PRESS     1280
+#define  DOWN_PRESS   1152
 #define  START_PRESS  1088
 #define  A_PRESS      1056
 #define  B_PRESS      1040
@@ -39,7 +39,6 @@
 void  main ()
 {
     int  index  = 0;
-    int  pos    = 0;
     int  word   = 0;
     int  x      = 0;
 
@@ -69,35 +68,35 @@ void  main ()
     // define the PIXEL region
     //
     select_region  (PIXEL);
-    define_region  (564, 360, 564, 360, 572,  367);  
+    define_region  (564, 360, 564, 360, 572, 367);  
 
     //////////////////////////////////////////////////////////////////////////
     //
     // define the UP region
     //
     select_region  (UP);
-    define_region  (0, 360, 0, 360, 47,  407);  
+    define_region  (0,   360, 0,   360,  47, 407);  
 
     //////////////////////////////////////////////////////////////////////////
     //
     // define the UP_PRESS region
     //
     select_region  (UP_PRESS);
-    define_region  (0, 408, 0, 408, 47,  454);  
+    define_region  (0,   408, 0,   408,  47, 454);  
 
     //////////////////////////////////////////////////////////////////////////
     //
     // define the DOWN region
     //
     select_region  (DOWN);
-    define_region  (47, 360, 47, 360, 94,  407);  
+    define_region  (47,  360, 47,  360,  94, 407);  
 
     //////////////////////////////////////////////////////////////////////////
     //
     // define the DOWN_PRESS region
     //
     select_region  (DOWN_PRESS);
-    define_region  (47, 408, 47, 408, 94,  454);  
+    define_region  (47,  408, 47,  408,  94, 454);  
 
     //////////////////////////////////////////////////////////////////////////
     //
@@ -134,13 +133,16 @@ void  main ()
         set_drawing_point (0, 0);
         draw_region ();
 
-        word        = gamepad_read (0);
+        word                    = gamepad_read (0);
+        if (word               == -1)
+        {
+            continue;
+        }
 
-        pos         = UP;
-        x           = 0;
-        for (index  = 1024;
-             index >= 1;
-             index  = index / 2)
+        x                       = 0;
+        for (index              = 1024;
+             index             >= 1;
+             index              = index >> 1)
         {
             if ((word & index) >  0)
             {
