@@ -1,5 +1,6 @@
 #include "math.h"
 #include "misc.h"
+#include "string.h"
 #include "video.h"
 #include "time.h"
 #include "gamepad.h"
@@ -41,6 +42,7 @@ void  main ()
     int  index  = 0;
     int  word   = 0;
     int  x      = 0;
+	int [10] data;
 
     //////////////////////////////////////////////////////////////////////////
     //
@@ -128,7 +130,8 @@ void  main ()
 
     while (1)
     {
-        //clear_screen  (0);
+        clear_screen  (color_black);
+		select_texture (0);
         select_region (0);
         set_drawing_point (0, 0);
         draw_region ();
@@ -139,6 +142,10 @@ void  main ()
             continue;
         }
 
+		itoa (word, data, 16);
+		print_at (0, 0, data);
+
+		select_texture (0);
         x                       = 0;
         for (index              = 1024;
              index             >= 1;
