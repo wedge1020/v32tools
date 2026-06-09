@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+<rom-definition version="1.0">
+    <rom type="cartridge" title="demo" version="1.0" />
+<binary path="obj/demo.vbin" />
+<textures>
+    <texture path="obj/texture.vtex" />
+</textures>
+<sounds />
+</rom-definition>

@@ -31,24 +31,12 @@
 #define  L_PRESS      1026
 #define  R_PRESS      1025
 
-//////////////////////////////////////////////////////////////////////////////
-//
-// declare function pointer 'trigfunc'
-//
-//float (float)* trigfunc;
-
 void  main ()
 {
     int  index  = 0;
     int  word   = 0;
     int  x      = 0;
     int [10] data;
-
-    //////////////////////////////////////////////////////////////////////////
-    //
-    // initialize trigfunc to initially point to the sin() function
-    //
-    //trigfunc   = &sin;
 
     //////////////////////////////////////////////////////////////////////////
     //

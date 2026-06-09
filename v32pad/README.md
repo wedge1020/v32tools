@@ -20,17 +20,17 @@ The `gamepad.h` status word is laid  out as follows (note it is following
 the ordering prescribed by the INP IOPort ID values):
 
   * bits 31-11: unused (there are only 11 inputs per gamepad)
-  * bit 10: state of the UP button
-  * bit 9: state of the DOWN button
-  * bit 8: state of the LEFT button
-  * bit 7: state of the RIGHT button
-  * bit 6: state of the START button
-  * bit 5: state of the A button
-  * bit 4: state of the B button
-  * bit 3: state of the X button
-  * bit 2: state of the Y button
-  * bit 1: state of the L button
-  * bit 0: state of the R button
+  * bit 10: state of the LEFT button (IOport 0x402)
+  * bit 9: state of the RIGHT button (IOport 0x403)
+  * bit 8: state of the UP button (IOport 0x404)
+  * bit 7: state of the DOWN button (IOport 0x405)
+  * bit 6: state of the START button (IOport 0x406)
+  * bit 5: state of the A button (IOport 0x407)
+  * bit 4: state of the B button (IOport 0x408)
+  * bit 3: state of the X button (IOport 0x409)
+  * bit 2: state of the Y button (IOport 0x40A)
+  * bit 1: state of the L button (IOport 0x40B)
+  * bit 0: state of the R button (IOport 0x40C)
 
 The current  implementation of  `gamepad.h` assumes  one status  word per
 gamepad. With optimization we could only fit two gamepads per status word
@@ -65,3 +65,8 @@ binary encoded state of the indicated gamepad's buttons).
 Either     copy    the     `gamepad.h`    file     into    the     system
 `Vircon32/DevTools/include/`  directory, or  into your  project's current
 directory for inclusion.
+
+### DEMO
+
+Run  the included  `Make.sh` to  build a  demo showing  the functionality
+provided by `gamepad.h` in action.
