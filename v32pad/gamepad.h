@@ -3,6 +3,49 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////
 //
+// Convenient defines for the various gamepad inputs, place value weighted
+//
+// The idea is that you'd bitmask AND them against the status word, and see if it
+// equals the same value to determine if that bit is set:
+//
+// if ((status_word & GAMEPAD_START) == GAMEPAD_START) // START is pressed
+//
+#define GAMEPAD_LEFT  0x400 // 1024
+#define GAMEPAD_RIGHT 0x200 // 512
+#define GAMEPAD_UP    0x100 // 256
+#define GAMEPAD_DOWN  0x080 // 128
+#define GAMEPAD_START 0x040 // 64
+#define GAMEPAD_A     0x020 // 32
+#define GAMEPAD_B     0x010 // 16
+#define GAMEPAD_X     0x008 // 8
+#define GAMEPAD_Y     0x004 // 4
+#define GAMEPAD_L     0x002 // 2
+#define GAMEPAD_R     0x001 // 1
+
+////////////////////////////////////////////////////////////////////////////////////////
+//
+// Convenient defines for the various gamepad inputs, by bit position
+//
+// These would represent the number of positions left shifted from the right that
+// correspond with the particular gamepad input:
+//
+// check_x      = (status_word & GAMEPAD_X) >> PAD_X;
+// if (check_x == 1) // X button pressed
+//
+#define PAD_LEFT      10
+#define PAD_RIGHT     9
+#define PAD_UP        8
+#define PAD_DOWN      7
+#define PAD_START     6
+#define PAD_A         5
+#define PAD_B         4
+#define PAD_X         3
+#define PAD_Y         2
+#define PAD_L         1
+#define PAD_R         0
+
+////////////////////////////////////////////////////////////////////////////////////////
+//
 // routine - the global array that is used to store the RAM-based machine
 // code routine for reading input
 //
