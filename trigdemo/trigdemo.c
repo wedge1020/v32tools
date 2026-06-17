@@ -19,36 +19,29 @@
 #define  Y            4
 #define  L            2
 #define  R            1
-#define  LEFT_PRESS   2048
-#define  RIGHT_PRESS  1536
-#define  UP_PRESS     1280
-#define  DOWN_PRESS   1152
-#define  START_PRESS  1088
-#define  A_PRESS      1056
-#define  B_PRESS      1040
-#define  X_PRESS      1032
-#define  Y_PRESS      1028
-#define  L_PRESS      1026
-#define  R_PRESS      1025
+
+#define  PI           3.1415926
 
 //////////////////////////////////////////////////////////////////////////////
 //
 // declare function pointer 'trigfunc'
 //
-//float (float)* trigfunc;
+float (float)* trigfunc;
 
 void  main ()
 {
     int  index  = 0;
     int  word   = 0;
-    int  x      = 0;
+    int  x      = 295;
+    int  y      = 0;
     int [10] data;
+    //float  rad  = 0.0;
 
     //////////////////////////////////////////////////////////////////////////
     //
     // initialize trigfunc to initially point to the sin() function
     //
-    //trigfunc   = &sin;
+    trigfunc   = &sin;
 
     //////////////////////////////////////////////////////////////////////////
     //
@@ -81,24 +74,10 @@ void  main ()
 
     //////////////////////////////////////////////////////////////////////////
     //
-    // define the UP_PRESS region
-    //
-    select_region  (UP_PRESS);
-    define_region  (0,   408, 47,  454, 0,   408);  
-
-    //////////////////////////////////////////////////////////////////////////
-    //
     // define the DOWN region
     //
     select_region  (DOWN);
     define_region  (47,  360, 94, 407, 47, 360);  
-
-    //////////////////////////////////////////////////////////////////////////
-    //
-    // define the DOWN_PRESS region
-    //
-    select_region  (DOWN_PRESS);
-    define_region  (47,  408, 94, 454, 47,  408);  
 
     //////////////////////////////////////////////////////////////////////////
     //
@@ -109,24 +88,10 @@ void  main ()
 
     //////////////////////////////////////////////////////////////////////////
     //
-    // define the LEFT_PRESS region
-    //
-    select_region  (LEFT_PRESS);
-    define_region  (93, 408, 141, 454, 95, 408);  
-
-    //////////////////////////////////////////////////////////////////////////
-    //
     // define the RIGHT region
     //
     select_region  (RIGHT);
     define_region  (140, 360, 188, 407, 142, 360);  
-
-    //////////////////////////////////////////////////////////////////////////
-    //
-    // define the RIGHT_PRESS region
-    //
-    select_region  (RIGHT_PRESS);
-    define_region  (140, 408, 188, 454, 142, 408);  
 
     //////////////////////////////////////////////////////////////////////////
     //
@@ -137,24 +102,10 @@ void  main ()
 
     //////////////////////////////////////////////////////////////////////////
     //
-    // define the START_PRESS region
-    //
-    select_region  (START_PRESS);
-    define_region  (188, 408, 234, 454, 188, 408);  
-
-    //////////////////////////////////////////////////////////////////////////
-    //
     // define the A region
     //
     select_region  (A);
     define_region  (234, 360, 282, 407, 234, 360);  
-
-    //////////////////////////////////////////////////////////////////////////
-    //
-    // define the A_PRESS region
-    //
-    select_region  (A_PRESS);
-    define_region  (234, 408, 282, 454, 234, 408);  
 
     //////////////////////////////////////////////////////////////////////////
     //
@@ -165,24 +116,10 @@ void  main ()
 
     //////////////////////////////////////////////////////////////////////////
     //
-    // define the B_PRESS region
-    //
-    select_region  (B_PRESS);
-    define_region  (282, 408, 328, 454, 282, 408);  
-
-    //////////////////////////////////////////////////////////////////////////
-    //
     // define the X region
     //
     select_region  (X);
     define_region  (328, 360, 376, 407, 328, 360);  
-
-    //////////////////////////////////////////////////////////////////////////
-    //
-    // define the X_PRESS region
-    //
-    select_region  (X_PRESS);
-    define_region  (328, 408, 376, 454, 328, 408);  
 
     //////////////////////////////////////////////////////////////////////////
     //
@@ -193,24 +130,10 @@ void  main ()
 
     //////////////////////////////////////////////////////////////////////////
     //
-    // define the Y_PRESS region
-    //
-    select_region  (Y_PRESS);
-    define_region  (376, 408, 422, 454, 376, 408);  
-
-    //////////////////////////////////////////////////////////////////////////
-    //
     // define the L region
     //
     select_region  (L);
     define_region  (422, 360, 470, 407, 422, 360);  
-
-    //////////////////////////////////////////////////////////////////////////
-    //
-    // define the L_PRESS region
-    //
-    select_region  (L_PRESS);
-    define_region  (422, 408, 470, 454, 422, 408);  
 
     //////////////////////////////////////////////////////////////////////////
     //
@@ -219,19 +142,12 @@ void  main ()
     select_region  (R);
     define_region  (470, 360, 516, 407, 470, 360);  
 
-    //////////////////////////////////////////////////////////////////////////
-    //
-    // define the R_PRESS region
-    //
-    select_region  (R_PRESS);
-    define_region  (470, 408, 516, 454, 470, 408);  
-
     while (1)
     {
         clear_screen  (color_black);
         select_texture (0);
-        select_region (SPRITE);
-        set_drawing_point (0, 80);
+        select_region (BACKGROUND);
+        set_drawing_point (0, 0);
         draw_region ();
 
         word                    = gamepad_read (0);
@@ -240,6 +156,14 @@ void  main ()
             continue;
         }
 
+        // title bounce: y = 8 * sin (3 * PI/180 * framecounter) * amplify
+
+        y                       = 8 * trigfunc (3 * PI/180 * index);
+        select_region (SPRITE);
+        set_drawing_point (x, y);
+        draw_region ();
+
+        /*
         itoa (word, data, 16);
         print_at (0, 0, data);
 
@@ -262,6 +186,9 @@ void  main ()
             draw_region ();
             x       = x + 56;
         }
+        */
+
+        index                   = index + 1;
 
         end_frame ();
     }
