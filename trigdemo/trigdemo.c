@@ -31,11 +31,11 @@ float (float)* trigfunc;
 void  main ()
 {
     int  index    = 0;
-	int  xoffset  = 0;
-	int  waveidx  = 0;
-	int  wavex    = 0;
-	int  wavey    = 0;
-	int  waveflag = 0;
+    int  xoffset  = 0;
+    int  waveidx  = 0;
+    int  wavex    = 0;
+    int  wavey    = 0;
+    int  waveflag = 0;
     int  word     = 0;
     int  x        = 295;
     int  y        = 0;
@@ -155,48 +155,44 @@ void  main ()
         //set_drawing_point (0, 0);
         //draw_region ();
 
-		waveflag                 = 0;
-		xoffset                  = -360;
-		for (waveidx             = -360;
-		     waveidx            <  540;
-			 waveidx             = waveidx + 1)
-		{
-			wavex                = 90 * cos      (3 * PI/180 * waveidx) + 120;
-			wavey                = 90 * trigfunc (3 * PI/180 * waveidx) + 120;
-			select_region (PIXEL);
-			set_drawing_point (wavex + xoffset + index, wavey);
-			draw_region ();
-			switch (waveidx)
-			{
-				case -240:
-				case -180:
-				case -120:
-				case -60:
-				case 0:
-				case 60:
-				case 120:
-				case 180:
-				case 240:
-				case 360:
-					xoffset      = xoffset + 180;
-					break;
-			}
+        waveflag                 = 0;
+        xoffset                  = -360;
+        for (waveidx             = -360;
+             waveidx            <  540;
+             waveidx             = waveidx + 1)
+        {
+            wavex                = 90 * cos      (3 * PI/180 * waveidx) + 120;
+            wavey                = 90 * trigfunc (3 * PI/180 * waveidx) + 120;
+            select_region (PIXEL);
+            set_drawing_point (wavex + xoffset + index, wavey);
+            draw_region ();
+            switch (waveidx)
+            {
+                case -240:
+                case -180:
+                case -120:
+                case -60:
+                case 0:
+                case 60:
+                case 120:
+                case 180:
+                case 240:
+                case 360:
+                    xoffset      = xoffset + 180;
+                    break;
+            }
 
-	//		if (xoffset > 640)
-		//		xoffset  = 0;
-		}
+    //        if (xoffset > 640)
+        //        xoffset  = 0;
+        }
 
-/*
         word                    = gamepad_read (0);
         if (word               == -1)
         {
             continue;
         }
-		*/
 
         // title bounce: y = 8 * sin (3 * PI/180 * framecounter) * amplify
-
-		
 
         y                   = 90 * trigfunc (3 * PI/180 * index) + 120;
         select_region (SPRITE);
