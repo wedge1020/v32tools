@@ -199,6 +199,30 @@ void  main ()
         set_drawing_point (x, y);
         draw_region ();
 
+		/*
+		 int x;
+		 int y;
+		 float angle;
+		 float sine_val;
+		 for (x=0; x<640; x++)
+		 {
+			 angle  = (x / (float) 640) * (4.0 * 2.0 * PI);
+			 sine_val  = sin (angle);
+			 y         = (int) (360 / 2.0 - (sine_val * (360 / 2.0)));
+			 if (y    <  0)
+			 {
+			 	y      = 0;
+			 }
+
+			 if (y    >= 360)
+			 {
+			     y     = 360 - 1;
+		     }
+	     }
+
+
+		*/
+
         /*
         itoa (word, data, 16);
         print_at (0, 0, data);
