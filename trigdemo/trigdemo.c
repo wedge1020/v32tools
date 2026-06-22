@@ -30,23 +30,30 @@ float (float)* trigfunc;
 
 void  main ()
 {
-    int  index    = 0;
-    int  xoffset  = 0;
-    int  waveidx  = 0;
-    int  wavex    = 0;
-    int  wavey    = 0;
-    int  waveflag = 0;
-    int  word     = 0;
-    int  x        = 295;
-    int  y        = 0;
-    int [10] data;
+    int      index     = 0;
+    int      xoffset   = 0;
+    int      waveidx   = 0;
+    int      wavex     = 0;
+    int      wavey     = 0;
+    int      waveflag  = 0;
+    int      word      = 0;
+    int      px        = 0;
+	int      sxorig    = 295;
+	int      sx        = 295;
+    int      y         = 0;
+	int      upper     = 40;
+	int      lower     = 280;
+	float    freq      = 4.0;
+    float    angle     = 0.0;
+    float    sine_val  = 0.0;
+    //int [10] data;
     //float  rad  = 0.0;
 
     //////////////////////////////////////////////////////////////////////////
     //
     // initialize trigfunc to initially point to the sin() function
     //
-    trigfunc      = &sin;
+    trigfunc           = &sin;
 
     //////////////////////////////////////////////////////////////////////////
     //
@@ -155,6 +162,7 @@ void  main ()
         //set_drawing_point (0, 0);
         //draw_region ();
 
+/*
         waveflag                 = 0;
         xoffset                  = -360;
         for (waveidx             = -360;
@@ -185,50 +193,108 @@ void  main ()
     //        if (xoffset > 640)
         //        xoffset  = 0;
         }
+		*/
 
-        word                    = gamepad_read (0);
-        if (word               == -1)
+        word                      = gamepad_read (0);
+		/*
+        if (word                == -1)
         {
             continue;
         }
+		*/
+		if (word                   == 0)
+		{
+			if (sx                 <  sxorig)
+			{
+				sx                  = sx + 1;
+			}
+
+			if (sx                 >  sxorig)
+			{
+				sx                  = sx - 1;
+			}
+		}
+
+		if ((word & GAMEPAD_UP)    == GAMEPAD_UP)
+		{
+			upper                   = upper - 1;
+		}
+
+		if ((word & GAMEPAD_DOWN)  == GAMEPAD_DOWN)
+		{
+			upper                   = upper + 1;
+		}
+
+		if ((word & GAMEPAD_LEFT)  == GAMEPAD_LEFT)
+		{
+			sx                      = sx - 2;
+		}
+
+		if ((word & GAMEPAD_RIGHT) == GAMEPAD_RIGHT)
+		{
+			sx                      = sx + 2;
+		}
+
+		if ((word & GAMEPAD_L)     == GAMEPAD_L)
+		{
+			freq                    = freq - 0.2;
+		}
+
+		if ((word & GAMEPAD_R)     == GAMEPAD_R)
+		{
+			freq                    = freq + 0.2;
+		}
+		/*
 
         // title bounce: y = 8 * sin (3 * PI/180 * framecounter) * amplify
 
         y                   = 90 * trigfunc (3 * PI/180 * index) + 120;
         select_region (SPRITE);
-        set_drawing_point (x, y);
+        set_drawing_point (px, y);
         draw_region ();
 
-		/*
-		 int x;
-		 int y;
-		 float angle;
-		 float sine_val;
-		 for (x=0; x<640; x++)
-		 {
-			 angle  = (x / (float) 640) * (4.0 * 2.0 * PI);
-			 sine_val  = sin (angle);
-			 y         = (int) (360 / 2.0 - (sine_val * (360 / 2.0)));
-			 if (y    <  0)
-			 {
-			 	y      = 0;
-			 }
+*/
+        for (px        = -360;
+             px       <  640;
+             px        = px + 1)
+        {
+            angle      = (px / (float) 640) * (freq * 2.0 * PI);
+            sine_val   = sin (angle);
+            y          = (int) (lower / 2.0 - (sine_val * (lower / 2.0)));
+			y          = y + upper;
+            if (y     <  0)
+            {
+                y      = 0;
+            }
 
-			 if (y    >= 360)
-			 {
-			     y     = 360 - 1;
-		     }
-	     }
+            if (y     >= 352)
+            {
+                y      = 352 - 1;
+            }
+            select_region (PIXEL);
+            set_drawing_point (px + xoffset, y);
+            draw_region ();
 
+			if ((sx + 16) == (px + xoffset))
+			{
+				select_region (SPRITE);
+				set_drawing_point (sx, y - 16);
+				draw_region ();
+			}
+        }
 
-		*/
+		xoffset        = xoffset + 1;
+		if (xoffset   >  320)
+		{
+			xoffset    = 0;
+		}
 
         /*
         itoa (word, data, 16);
         print_at (0, 0, data);
 
         select_texture (0);
-        x                       = 0;
+        px                       = 0;
         for (index              = 1024;
              index             >= 1;
              index              = index >> 1)
@@ -242,13 +308,13 @@ void  main ()
                 select_region (index);
             }
 
-            set_drawing_point (x, 160);
+            set_drawing_point (px, 160);
             draw_region ();
-            x       = x + 56;
+            px       = px + 56;
         }
         */
 
-        index                   = (index + 1) % 360;
+//        index                   = (index + 1) % 360;
 
         end_frame ();
     }
