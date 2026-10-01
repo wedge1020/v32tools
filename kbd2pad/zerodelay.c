@@ -300,7 +300,7 @@ int32_t  main (int32_t  argc, char **argv)
                     break;
                 }
 
-                printf (" \t%3d 0%03o 0x%02x\n",
+                fprintf (stdout, " \t%3d 0%03o 0x%02x -> ",
                         buffer[0], buffer[0], buffer[0]);
 
                 //////////////////////////////////////////////////////////////
@@ -314,8 +314,10 @@ int32_t  main (int32_t  argc, char **argv)
                 {
                     value            = (buffer[0] & mask) ? HIGH : LOW;
                     digitalWrite (index, value);
+                    fprintf (stdout, "%c", (value+48));
                     mask             = mask >> 1;
                 }
+                fprintf (stdout, "\n");
             }
             else // timeout
             {
