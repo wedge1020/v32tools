@@ -113,7 +113,7 @@ static void clean_up (void)
         exit (1);
     }
 
-    if (tcsetattr (fd, 0, &old) == -1)
+    if (tcsetattr (fd, TCSAFLUSH, &old) == -1)
     {
         perror("tcsetattr");
     }
@@ -166,7 +166,7 @@ int32_t  main (int32_t  argc, char **argv)
     int32_t  index                   = 0;
     int32_t  value                   = 0;
     int32_t  mask                    = 0x40;
-    int32_t  num_bytes               = 1;
+    int32_t  num_bytes               = 0;
     int32_t  option                  = 0;
     int32_t  print_ascii             = FALSE;
     int32_t  show_keycodes           = TRUE;
@@ -236,63 +236,88 @@ int32_t  main (int32_t  argc, char **argv)
 
     if (print_ascii                 == TRUE)
     {
-        /* no mode and signal and timer stuff - just read stdin */
-        fd                           = 0;
+        ////////////////////////////////////////////////////////////////////////////////
+        //
+        // ascii mode: no mode changing, no signal handling, just read stdin.
+        // NOTE: unlike scancode/keycode mode, this works from any terminal,
+        //       including a terminal window inside the desktop GUI.
+        //
+        fd                           = STDIN_FILENO;
+
         if (tcgetattr (fd, &old)    == -1)
         {
             perror ("tcgetattr");
+            exit (1);
         }
 
-        if (tcgetattr (fd, &new)    == -1)
-        {
-            perror ("tcgetattr");
-        }
-
-        new.c_lflag                  = new.c_lflag & (~ (ICANON | ISIG));
-        new.c_lflag                  = new.c_lflag | (ECHO | ECHOCTL);
-        new.c_iflag                  = 0;
+        new                          = old;
+        new.c_lflag                   = new.c_lflag & (~ (ICANON | ISIG));
+        new.c_lflag                   = new.c_lflag | (ECHO | ECHOCTL);
+        new.c_iflag                   = 0;
         new.c_cc[VMIN]               = 1;
         new.c_cc[VTIME]              = 0;
+
         if (tcsetattr (fd, TCSAFLUSH, &new) == -1)
         {
-            perror ("tcgetattr");
+            perror ("tcsetattr");
+            exit (1);
         }
 
         fprintf (stdout, "\nPress any keys - "
                  "Ctrl-D will terminate this program\n\n");
+
         while (1)
         {
             //////////////////////////////////////////////////////////////////
             //
-            // poll() results: greater than 0 if key is pressed, equal to
+            // poll() results: greater than 0 if a key is pressed, equal to
             //                 zero if we hit the timeout, and less  than
-            //                 zero if some error occurred 
+            //                 zero if some error occurred
             //
             value                    = poll (fds, 1, timeout_ms);
+
+            if (value               <  0) // error
+            {
+                if (errno          == EINTR)
+                {
+                    continue;         // interrupted by a signal: just retry
+                }
+                perror ("poll");
+                break;
+            }
 
             if (value               >  0) // key pressed
             {
                 num_bytes            = read (fd, buffer, 1);
-                if (num_bytes       == 1)
+
+                if (num_bytes       <=  0) // EOF or read error
                 {
-                    printf(" \t%3d 0%03o 0x%02x\n",
-                           buffer[0], buffer[0], buffer[0]);
-                    mask             = 0x40;
-                    for (index       = 6;
-                         index      <= 12;
-                         index       = index + 1)
-                    {
-                        value        = buffer[0] & mask;
-                        if (value   >  0)
-                        {
-                            value    = HIGH;
-                        }
-                        digitalWrite (index, value);
-                        mask         = mask >> 1;
-                    }
+                    break;
+                }
+
+                if (buffer[0]      == 0x04) // Ctrl-D
+                {
+                    break;
+                }
+
+                printf (" \t%3d 0%03o 0x%02x\n",
+                        buffer[0], buffer[0], buffer[0]);
+
+                //////////////////////////////////////////////////////////////
+                //
+                // digitize the byte: bits 6..0 map to pins 6..12
+                //
+                mask                 = 0x40;
+                for (index           = 6;
+                     index         <= 12;
+                     index          = index + 1)
+                {
+                    value            = (buffer[0] & mask) ? HIGH : LOW;
+                    digitalWrite (index, value);
+                    mask             = mask >> 1;
                 }
             }
-            else if (value          == 0) // reached timeout
+            else // timeout
             {
                 //////////////////////////////////////////////////////////////
                 //
@@ -300,25 +325,20 @@ int32_t  main (int32_t  argc, char **argv)
                 // a momentary button press
                 //
                 for (index           = 6;
-                     index          <= 12;
-                     index           = index + 1)
+                     index         <= 12;
+                     index          = index + 1)
                 {
                     digitalWrite (index, LOW);
                 }
             }
-
-            if ((num_bytes          != 1) ||
-                (buffer[0]          == 04))
-            {
-                break;
-            }
         }
 
-        if (tcsetattr (fd, 0, &old) == -1)
+        if (tcsetattr (fd, TCSAFLUSH, &old) == -1)
         {
             perror ("tcsetattr");
         }
-        exit (0);
+
+        return (0);
     }
 
     fd                               = getfd (NULL);
@@ -332,7 +352,10 @@ int32_t  main (int32_t  argc, char **argv)
     ////////////////////////////////////////////////////////////////////////////////////
     //
     // any other signal of note: receiving a signal instigates a nice exit, where
-    // the keyboard needs to be restored to a usable mode
+    // the keyboard needs to be restored to a usable mode.
+    //
+    // NOTE: SIGKILL and SIGSTOP cannot be caught, so they are (deliberately)
+    //       not listed here.
     //
     signal (SIGHUP,    die);
     signal (SIGINT,    die);
@@ -342,7 +365,6 @@ int32_t  main (int32_t  argc, char **argv)
     signal (SIGABRT,   die);
     signal (SIGIOT,    die);
     signal (SIGFPE,    die);
-    signal (SIGKILL,   die);
     signal (SIGUSR1,   die);
     signal (SIGSEGV,   die);
     signal (SIGUSR2,   die);
@@ -353,7 +375,6 @@ int32_t  main (int32_t  argc, char **argv)
 #endif
     signal (SIGCHLD,   die);
     signal (SIGCONT,   die);
-    signal (SIGSTOP,   die);
     signal (SIGTSTP,   die);
     signal (SIGTTIN,   die);
     signal (SIGTTOU,   die);
@@ -470,9 +491,14 @@ int32_t  open_a_console (int8_t *filename)
 //          /dev/console will fail  if  an  X session  has  taken  place
 //          (as  it does  a  chown  on /dev/console).
 //
+//          NOTE: if a specific filename is given, it is the ONLY thing
+//                that is tried. The fallback list only applies when no
+//                filename was supplied (filename == NULL).
+//
 int32_t  getfd (int8_t *filename)
 {
     int32_t  fd   = 0;
+
     if (filename != NULL)
     {
         fd        = open_a_console (filename);
