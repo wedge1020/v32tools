@@ -473,7 +473,7 @@ int32_t  open_a_console (int8_t *filename)
 int32_t  getfd (int8_t *filename)
 {
     int32_t  fd   = 0;
-    if (filename == NULL)
+    if (filename != NULL)
     {
         fd        = open_a_console (filename);
         if (fd   >= 0)
