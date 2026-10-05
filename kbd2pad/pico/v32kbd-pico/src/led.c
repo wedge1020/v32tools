@@ -10,38 +10,60 @@
 #define LED_PIN         PICO_DEFAULT_WS2812_PIN
 #define LED_PIO         pio2
 
-// light color, as 0xRRGGBB. Blue is used by default because it looks the
-// same whether the LED takes its colors in RGB or in GRB order. Keep the
-// values low: these LEDs are very bright
-#define LED_COLOR       0x000030
+// Order in which the LED takes its colors. WS2812 normally use green,
+// red, blue. If red and green show up swapped on your board (the
+// "no keyboard" light is green instead of red), change this to 0
+#define LED_ORDER_GRB   1
 
-// blink timings, in milliseconds
-#define CONNECT_BLINKS  3
-#define CONNECT_ON_MS   150
-#define CONNECT_OFF_MS  150
-#define SETUP_ON_MS     250
+// light colors, as 0xRRGGBB. Keep values low: these LEDs are very bright
+#define COLOR_OFF       0x000000
+#define COLOR_RED       0x300000
+#define COLOR_YELLOW    0x281800
+#define COLOR_GREEN     0x003000
+#define COLOR_BLUE      0x000030
+
+// blink timings, in milliseconds (on time, off time)
+#define BLINK_ON_MS     150     // yellow / green / blue blinks
+#define BLINK_OFF_MS    150
+#define QUICK_ON_MS      80     // quick blue blinks when entering setup
+#define QUICK_OFF_MS     80
+#define SETUP_ON_MS     250     // steady blue blinking in setup mode
 #define SETUP_OFF_MS    250
 
-static uint led_sm     = 0;
-static bool led_ready  = false;
-static bool led_is_on  = false;
+#define CONNECT_BLINKS  3       // minimum yellow blinks; also green blinks
+#define SETUP_IN_BLINKS 2       // quick blue blinks when entering setup
+#define SETUP_OUT_BLINKS 3      // blue blinks when leaving setup
 
-static void led_set( bool on )
+//////////////////////////////////////////////////////////////////////////////
+//
+// LED output
+//
+static uint     led_sm    = 0;
+static bool     led_ready = false;
+static uint32_t led_shown = 0xFFFFFFFF;     // color being shown now
+
+static void led_show( uint32_t rgb )
 {
-    if( !led_ready || on == led_is_on )
+    if( !led_ready || rgb == led_shown )
       return;
 
-    // WS2812 takes 24 bits in order green, red, blue
-    uint32_t rgb = on? LED_COLOR : 0;
-    uint32_t grb = ((rgb & 0x00FF00) << 8) | ((rgb & 0xFF0000) >> 8) | (rgb & 0x0000FF);
+    uint32_t r = (rgb >> 16) & 0xFF;
+    uint32_t g = (rgb >>  8) & 0xFF;
+    uint32_t b =  rgb        & 0xFF;
 
-    // the FIFO is always empty here (we send 1 word at most every
-    // 150 ms), but if it ever was not, just retry on the next call
+  #if LED_ORDER_GRB
+    uint32_t data = (g << 16) | (r << 8) | b;
+  #else
+    uint32_t data = (r << 16) | (g << 8) | b;
+  #endif
+
+    // the FIFO is always empty here (colors change every 80 ms at
+    // most), but if it ever was not, just retry on the next call
     if( pio_sm_is_tx_fifo_full( LED_PIO, led_sm ) )
       return;
 
-    pio_sm_put( LED_PIO, led_sm, grb << 8 );
-    led_is_on = on;
+    pio_sm_put( LED_PIO, led_sm, data << 8 );
+    led_shown = rgb;
 }
 
 void led_init( void )
@@ -73,47 +95,145 @@ void led_init( void )
     pio_sm_set_enabled( LED_PIO, led_sm, true );
     led_ready = true;
 
-    // force the first update, to turn the LED off
-    led_is_on = true;
-    led_set( false );
+    led_show( COLOR_RED );
 }
 
-void led_task( bool keyboard_online, bool setup_mode )
+//////////////////////////////////////////////////////////////////////////////
+//
+// Light patterns
+//
+
+// a blink sequence that plays once, from a given moment (which can be
+// in the future, to let a previous pattern finish first)
+typedef struct
 {
-    static bool     was_online    = false;
-    static uint32_t connect_start = 0;
+    bool     active;
+    uint32_t start;
+    uint32_t color;
+    uint32_t blinks, on_ms, off_ms;
+}
+sequence_t;
+
+static sequence_t sequence = { false, 0, 0, 0, 0, 0 };
+
+static void play_sequence( uint32_t start, uint32_t color, uint32_t blinks, uint32_t on_ms, uint32_t off_ms )
+{
+    sequence.active = true;
+    sequence.start  = start;
+    sequence.color  = color;
+    sequence.blinks = blinks;
+    sequence.on_ms  = on_ms;
+    sequence.off_ms = off_ms;
+}
+
+// true when "now" is at or after "moment" (safe on timer wrap around)
+static bool reached( uint32_t now, uint32_t moment )
+{
+    return (int32_t)( now - moment ) >= 0;
+}
+
+void led_task( led_link_t link, bool setup_mode )
+{
+    static led_link_t last_link     = LED_LINK_NONE;
+    static bool       last_setup    = false;
+    static uint32_t   yellow_start  = 0;    // when yellow blinking began
+    static uint32_t   steady_start  = 0;    // when the steady pattern began
+
     uint32_t now = to_ms_since_boot( get_absolute_time() );
+    uint32_t blink_period = BLINK_ON_MS + BLINK_OFF_MS;
 
-    // a keyboard was just detected: begin the connection blinks
-    if( keyboard_online && !was_online )
-      connect_start = now;
-
-    was_online = keyboard_online;
-
-    // no keyboard: off
-    if( !keyboard_online )
+    //////////////////////////////////////////////////////////////////////////
+    //
+    // React to state changes
+    //
+    if( link != last_link )
     {
-        led_set( false );
+        if( link == LED_LINK_NONE )
+        {
+            // keyboard removed: straight to red
+            sequence.active = false;
+        }
+
+        else if( link == LED_LINK_CONNECTING )
+        {
+            sequence.active = false;
+            yellow_start = now;
+        }
+
+        else  // keyboard ready
+        {
+            // if we never saw it connecting, begin the yellow blinks now
+            if( last_link != LED_LINK_CONNECTING )
+              yellow_start = now;
+
+            // green blinks begin once the minimum of yellow blinks is done,
+            // and always after a complete yellow blink
+            uint32_t yellow_blinks = (now - yellow_start + blink_period - 1) / blink_period;
+            if( yellow_blinks < CONNECT_BLINKS ) yellow_blinks = CONNECT_BLINKS;
+
+            play_sequence( yellow_start + yellow_blinks * blink_period,
+                           COLOR_GREEN, CONNECT_BLINKS, BLINK_ON_MS, BLINK_OFF_MS );
+        }
+
+        last_link = link;
+    }
+
+    if( setup_mode != last_setup )
+    {
+        if( link == LED_LINK_ONLINE )
+        {
+            if( setup_mode )
+              play_sequence( now, COLOR_BLUE, SETUP_IN_BLINKS, QUICK_ON_MS, QUICK_OFF_MS );
+            else
+              play_sequence( now, COLOR_BLUE, SETUP_OUT_BLINKS, BLINK_ON_MS, BLINK_OFF_MS );
+        }
+
+        last_setup = setup_mode;
+    }
+
+    //////////////////////////////////////////////////////////////////////////
+    //
+    // Show the light for this moment
+    //
+
+    // no keyboard: solid red
+    if( link == LED_LINK_NONE )
+    {
+        led_show( COLOR_RED );
         return;
     }
 
-    // connection blinks (they begin by an on period)
-    uint32_t elapsed = now - connect_start;
-    uint32_t period  = CONNECT_ON_MS + CONNECT_OFF_MS;
-
-    if( elapsed < CONNECT_BLINKS * period )
+    // a sequence is being played, or waiting for the yellow blinks to end
+    if( sequence.active )
     {
-        led_set( (elapsed % period) < CONNECT_ON_MS );
-        return;
+        uint32_t period = sequence.on_ms + sequence.off_ms;
+
+        if( !reached( now, sequence.start ) )
+        {
+            led_show( ((now - yellow_start) % blink_period) < BLINK_ON_MS? COLOR_YELLOW : COLOR_OFF );
+            return;
+        }
+
+        uint32_t elapsed = now - sequence.start;
+
+        if( elapsed < sequence.blinks * period )
+        {
+            led_show( (elapsed % period) < sequence.on_ms? sequence.color : COLOR_OFF );
+            return;
+        }
+
+        // finished: the steady pattern begins here
+        sequence.active = false;
+        steady_start = sequence.start + sequence.blinks * period;
     }
 
-    // setup mode: blink continuously
-    if( setup_mode )
-    {
-        led_set( (now % (SETUP_ON_MS + SETUP_OFF_MS)) < SETUP_ON_MS );
-        return;
-    }
+    // steady patterns
+    if( link == LED_LINK_CONNECTING )
+      led_show( ((now - yellow_start) % blink_period) < BLINK_ON_MS? COLOR_YELLOW : COLOR_OFF );
 
-    // normal operation: solid
-    led_set( true );
+    else if( setup_mode )
+      led_show( ((now - steady_start) % (SETUP_ON_MS + SETUP_OFF_MS)) < SETUP_ON_MS? COLOR_BLUE : COLOR_OFF );
+
+    else
+      led_show( COLOR_GREEN );
 }

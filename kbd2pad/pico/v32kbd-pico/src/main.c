@@ -15,6 +15,7 @@
 #include "pico/stdlib.h"
 #include "hardware/clocks.h"
 #include "tusb.h"
+#include "host/hcd.h"
 #include "pio_usb.h"
 #include "v32kbd.h"
 #include "led.h"
@@ -44,6 +45,23 @@ static bool setup_mode = false;
 
 // number of keyboards currently plugged in and ready
 static int keyboards_online = 0;
+
+//////////////////////////////////////////////////////////////////////////////
+//
+// The gamepad only exists for the PC while there is a keyboard: with no
+// keyboard the type C port stays electrically disconnected (it still
+// powers the board), and the PC sees the gamepad being unplugged.
+//
+static bool gamepad_enabled = false;
+
+// A device was plugged into the keyboard port and is being set up. This
+// is only used for the status light. The flag is set from the USB host
+// stack (maybe in an interrupt) and taken by the main loop.
+#define CONNECT_TIMEOUT_MS  5000
+static volatile bool attach_event = false;
+static volatile bool remove_event = false;
+static bool     connecting       = false;
+static uint32_t connecting_since = 0;
 
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -87,9 +105,14 @@ static bool queue_pop( key_event_t* event )
 //
 // Gamepad state
 //
+enum { IDLE, SETTLING, HOLDING };
+static int      protocol_state = IDLE;
+
 static uint16_t buttons      = 0;       // state we want the PC to see
 static uint16_t buttons_sent = 0;       // state last sent to the PC
 static bool     report_sent  = false;   // nothing was sent yet
+
+static void protocol_reset( void );
 
 static uint32_t millis( void )
 {
@@ -108,11 +131,7 @@ static void key_changed( uint8_t usage, bool pressed )
         if( pressed )
         {
             setup_mode = !setup_mode;
-
-            // leave all buttons released and discard pending events;
-            // the strobe restarts from Left, as when just plugged
-            buttons = 0;
-            queue_head = queue_tail;
+            protocol_reset();
         }
 
         return;
@@ -143,11 +162,9 @@ static void key_changed( uint8_t usage, bool pressed )
 //
 static void protocol_task( void )
 {
-    enum { IDLE, SETTLING, HOLDING };
-
-    static int      state = IDLE;
     static uint32_t since = 0;
     uint32_t now = millis();
+    #define state protocol_state
 
     if( setup_mode )
     {
@@ -213,6 +230,81 @@ static void protocol_task( void )
             break;
         }
     }
+
+    #undef state
+}
+
+//////////////////////////////////////////////////////////////////////////////
+//
+// Leaves everything as when just powered: no buttons pressed, no pending
+// events, and the strobe restarting from Left
+//
+static void protocol_reset( void )
+{
+    buttons        = 0;
+    queue_head     = queue_tail;
+    protocol_state = IDLE;
+}
+
+//////////////////////////////////////////////////////////////////////////////
+//
+// Connects the gamepad to the PC only while there is a keyboard
+//
+static void gamepad_task( void )
+{
+    bool wanted = (keyboards_online > 0);
+
+    if( wanted == gamepad_enabled )
+      return;
+
+    gamepad_enabled = wanted;
+
+    if( wanted )
+      tud_connect();
+
+    else
+    {
+        tud_disconnect();
+        setup_mode = false;
+        protocol_reset();
+    }
+
+    // either way, the PC knows nothing of our state now
+    report_sent  = false;
+    buttons_sent = 0;
+}
+
+//////////////////////////////////////////////////////////////////////////////
+//
+// Status light
+//
+static void status_task( void )
+{
+    uint32_t now = millis();
+
+    if( attach_event )
+    {
+        attach_event     = false;
+        connecting       = true;
+        connecting_since = now;
+    }
+
+    if( remove_event )
+    {
+        remove_event = false;
+        connecting   = false;
+    }
+
+    // give up on devices that never become a keyboard
+    if( connecting && now - connecting_since > CONNECT_TIMEOUT_MS )
+      connecting = false;
+
+    led_link_t link = LED_LINK_NONE;
+
+    if( keyboards_online > 0 ) link = LED_LINK_ONLINE;
+    else if( connecting )      link = LED_LINK_CONNECTING;
+
+    led_task( link, setup_mode );
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -221,7 +313,7 @@ static void protocol_task( void )
 //
 static void report_task( void )
 {
-    if( !tud_mounted() )
+    if( !gamepad_enabled || !tud_mounted() )
     {
         // the PC knows nothing of our state: begin again when it does
         report_sent = false;
@@ -256,6 +348,9 @@ int main( void )
     tusb_rhport_init_t device_init = { .role = TUSB_ROLE_DEVICE, .speed = TUSB_SPEED_AUTO };
     tusb_init( BOARD_TUD_RHPORT, &device_init );
 
+    // but stay disconnected from the PC until there is a keyboard
+    tud_disconnect();
+
     // PIO USB port: host (keyboard); D+ is GPIO 12 and D- is GPIO 13
     pio_usb_configuration_t pio_config = PIO_USB_DEFAULT_CONFIG;
     pio_config.pin_dp = PICO_DEFAULT_PIO_USB_DP_PIN;
@@ -273,7 +368,8 @@ int main( void )
         tud_task();
         protocol_task();
         report_task();
-        led_task( keyboards_online > 0, setup_mode );
+        gamepad_task();
+        status_task();
     }
 }
 
@@ -384,6 +480,23 @@ static void process_keyboard_report( keyboard_t* keyboard, const hid_keyboard_re
     keyboard->last = *report;
 }
 
+// called by the USB host stack on every event (maybe from an interrupt)
+void tuh_event_hook_cb( uint8_t rhport, uint32_t eventid, bool in_isr )
+{
+    (void) rhport; (void) in_isr;
+
+    if( eventid == HCD_EVENT_DEVICE_ATTACH ) attach_event = true;
+    if( eventid == HCD_EVENT_DEVICE_REMOVE ) remove_event = true;
+}
+
+// a device has been completely set up: if by now it gave
+// us no keyboard, it is something else (a mouse, a hub...)
+void tuh_mount_cb( uint8_t dev_addr )
+{
+    (void) dev_addr;
+    connecting = false;
+}
+
 // a HID interface was connected: we only care for keyboards. These
 // are used in boot protocol (TinyUSB's default), so their reports
 // always have the standard 8-byte format
@@ -411,17 +524,11 @@ void tuh_hid_umount_cb( uint8_t dev_addr, uint8_t instance )
     memset( &empty, 0, sizeof(empty) );
     process_keyboard_report( keyboard, &empty );
     keyboard->used = false;
-    keyboards_online--;
+    if( keyboards_online > 0 )
+      keyboards_online--;
 
-    // with no keyboard left there is no way to leave setup mode,
-    // so go back to normal operation with all buttons released
-    if( keyboards_online <= 0 && setup_mode )
-    {
-        keyboards_online = 0;
-        setup_mode = false;
-        buttons = 0;
-        queue_head = queue_tail;
-    }
+    // when no keyboards are left, gamepad_task() disconnects
+    // the gamepad and leaves setup mode
 }
 
 void tuh_hid_report_received_cb( uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len )

@@ -28,18 +28,30 @@ regular joystick profile, and Vircon32  programs read it with the same
 
 ## STATUS LIGHT
 
-The board's RGB LED shows the state of the adapter:
+The board's onboard RGB LED shows the state of the adapter:
 
-| Light            | Meaning                                       |
-| ---------------- | --------------------------------------------- |
-| off              | no keyboard detected                          |
-| 3 quick blinks   | a keyboard was just detected and is ready     |
-| solid            | keyboard ready, normal operation              |
-| steady blinking  | setup mode (see below)                        |
+| Light                                 | Meaning                              |
+| ------------------------------------- | ------------------------------------ |
+| solid red                             | powered, no keyboard                 |
+| blinking yellow                       | a device was plugged in and is being set up (at least 3 blinks) |
+| 3 green blinks, then solid green      | keyboard ready, normal operation     |
+| 2 quick blue blinks, then steady blue blinking | setup mode (see below)      |
+| 3 blue blinks, then solid green       | setup mode was left                  |
 
-Color and blink timings are at the top of `src/led.c`. The light is blue
-by default, since  that looks the same whether the LED  takes its colors
-in RGB or GRB order.
+If something that is not a keyboard is plugged in, the light blinks
+yellow for a moment and goes back to red.
+
+Colors and blink timings are at the top of `src/led.c`. The LED is
+assumed to take its colors in the usual WS2812 order (green, red, blue).
+If the "no keyboard" light is green instead of red, set `LED_ORDER_GRB`
+to 0 there.
+
+## GAMEPAD PRESENCE
+
+The computer only sees the `v32kbd` gamepad while a keyboard is plugged
+into the adapter. With no keyboard, the type C port keeps powering the
+board but stays disconnected for data, so for the computer the gamepad is
+unplugged. It comes back when a keyboard is detected.
 
 ## PROTOCOL
 
@@ -86,13 +98,14 @@ buttons of a report across 2 frames.
 
 ## SETTING UP THE EMULATOR
 
-The emulator needs a joystick profile  for the adapter. Vircon32's
+The emulator needs a joystick profile  for the adapter. A keyboard must
+be plugged into the adapter for the computer to see the gamepad. Vircon32's
 EditControls creates profiles by asking  you to press each control on
 its own, which the  v32kbd protocol never does. For  this, the adapter
 has a **setup mode**:
 
 1. Press **Scroll Lock** on the keyboard to enter setup mode. The
-   status light blinks continuously while in this mode.
+   status light blinks blue while in this mode.
 2. In EditControls, create a profile for the `v32kbd` joystick and
    press these keys when asked for each control:
 
@@ -101,8 +114,8 @@ has a **setup mode**:
    | F1   | F2    | F3 | F4   | F5    | F6 | F7 | F8 | F9 | F10 | F11 |
 
    Leave the Command button unmapped.
-3. Press **Scroll Lock** again to go back to normal operation (the
-   light goes back to solid). Unplugging the keyboard also leaves
+3. Press **Scroll Lock** again to go back to normal operation (3 blue
+   blinks, then solid green). Unplugging the keyboard also leaves
    setup mode.
 4. In the emulator, menu Gamepads, select that profile for the gamepad
    your program expects (Gamepad 2 for the v32kbd test program).
