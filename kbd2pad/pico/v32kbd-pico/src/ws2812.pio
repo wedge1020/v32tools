@@ -1,0 +1,20 @@
+;
+; Driver for a WS2812 RGB LED: the standard program from the Raspberry Pi
+; Pico examples (Copyright (c) 2020 Raspberry Pi (Trading) Ltd., BSD-3-Clause)
+;
+.program ws2812
+.side_set 1
+
+.define public T1 3
+.define public T2 3
+.define public T3 4
+
+.wrap_target
+bitloop:
+    out x, 1       side 0 [T3 - 1]  ; side-set still takes place when instruction stalls
+    jmp !x do_zero side 1 [T1 - 1]  ; branch on the bit we shifted out, positive pulse
+do_one:
+    jmp  bitloop   side 1 [T2 - 1]  ; continue driving high, for a long pulse
+do_zero:
+    nop            side 0 [T2 - 1]  ; or drive low, for a short pulse
+.wrap
