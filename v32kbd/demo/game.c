@@ -708,10 +708,11 @@ void main (void)
 
     //////////////////////////////////////////////////////////////////////
     //
-    // The v32kbd keyboard is expected in the SECOND gamepad port (id 1):
+    // For this demo, the v32kbd keyboard is expected in the SECOND
+    // gamepad port (id 1):
     // in the emulator, select "v32kbd" in menu Gamepads > Gamepad 2
     //
-    keyboard      = v32kbd_init (1);
+    keyboard      = v32kbd_init (SECOND_GAMEPAD_PORT);
 
     while (true)
     {

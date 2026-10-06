@@ -22,7 +22,7 @@ void main (void)
     int [12]        sym;
     v32kbd         *keyboard  = NULL;
 
-    keyboard                  = v32kbd_init (1);
+    keyboard                  = v32kbd_init (SECOND_GAMEPAD_PORT);
     text[0]                   = 0;
 
     while (true)
