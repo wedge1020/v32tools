@@ -3,13 +3,14 @@
 
 //////////////////////////////////////////////////////////////////////////////
 //
-// v32tools/v32kbd library: "keyboard.h"         File version: 2026/10/05
+// v32tools/v32kbd library: "keyboard.h"         File version: 2026/10/06
 // ----------------------------------------------------------------------
+//
 // This file contains all definitions and functions needed by programs to
 // access input from a keyboard-attached gamepad, allowing keyboard input
 // in Vircon32 programs.
 //
-// A v32kbd device looks like a regular gamepad to the console,  but its
+// A v32kbd device  looks like a regular gamepad to  the console, but its
 // 11 controls are used to report key events instead:
 //
 // PORT: 0x402 -> INP_GamepadLeft        \  strobe: each new key event
@@ -24,20 +25,20 @@
 //       0x40B -> INP_GamepadButtonL     -> key code, bit 5
 //       0x40C -> INP_GamepadButtonR     -> key code, bit 6
 //
-// The device reports at most 1 key event per frame,  and it keeps  that
-// state until the next event.  So a new event is recognized by the side
+// The device reports  at most 1 key  event per frame, and  it keeps that
+// state until the next  event. So a new event is  recognized by the side
 // of the strobe (Left or Right) being different from the last one seen.
 //
 // Key codes are 7 bits, and identify KEYS (not characters): keys with an
-// ASCII character report it as typed with no shift on a US layout  ('a'
-// to 'z', '0' to '9', space and ` - = [ ] \ ; ' , . /).  Other keys use
-// the V32KEY_ codes defined below.  Shift and caps lock are applied  by
+// ASCII character report it  as typed with no shift on  a US layout ('a'
+// to 'z', '0' to '9',  space and ` - = [ ] \ ; '  , . /). Other keys use
+// the V32KEY_  codes defined below. Shift  and caps lock are  applied by
 // this library, to obtain the typed character (symbol) for each key.
 //
 // The design of v32kbd is such that allows for multiple instances, if it
 // is desired to have more than one keyboard present.
 //
-// IMPORTANT: v32kbd_probe() must be called once on EVERY frame for each
+// IMPORTANT: v32kbd_probe() must be called  once on EVERY frame for each
 // keyboard. If frames are skipped, key events can be lost.
 //
 //////////////////////////////////////////////////////////////////////////////
@@ -75,6 +76,15 @@
 #define V32KEY_LGUI        28  // left command on Mac, Windows key on PC
 #define V32KEY_RGUI        29  // right command on Mac
 #define V32KEY_DELETE     127
+
+//////////////////////////////////////////////////////////////////////////////
+//
+// game port identifiers
+//
+#define FIRST_GAMEPAD_PORT  0  // first gamepad port (id 0)
+#define SECOND_GAMEPAD_PORT 1  // second gamepad port (id 1)
+#define THIRD_GAMEPAD_PORT  2  // third gamepad port (id 2)
+#define FOURTH_GAMEPAD_PORT 3  // fourth gamepad port (id 3)
 
 //////////////////////////////////////////////////////////////////////////////
 //
