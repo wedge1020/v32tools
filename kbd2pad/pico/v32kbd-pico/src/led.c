@@ -13,7 +13,7 @@
 // Order in which the LED takes its colors. WS2812 normally use green,
 // red, blue. If red and green show up swapped on your board (the
 // "no keyboard" light is green instead of red), change this to 0
-#define LED_ORDER_GRB   1
+#define LED_ORDER_GRB   0
 
 // light colors, as 0xRRGGBB. Keep values low: these LEDs are very bright
 #define COLOR_OFF       0x000000

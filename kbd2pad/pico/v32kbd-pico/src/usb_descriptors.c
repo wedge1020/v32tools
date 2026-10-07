@@ -94,8 +94,8 @@ uint8_t const* tud_descriptor_configuration_cb( uint8_t index )
 static char const* const string_desc[] =
 {
     (const char[]) { 0x09, 0x04 },  // 0: supported language is English
-    "v32tools",                     // 1: Manufacturer
-    "v32kbd",                       // 2: Product
+    "v32io:",                       // 1: Manufacturer
+    "kbd",                          // 2: Product
     "000001",                       // 3: Serial
 };
 
