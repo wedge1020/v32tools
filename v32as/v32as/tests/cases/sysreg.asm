@@ -1,0 +1,9 @@
+MOV R3, IP
+MOV R4, IR
+MOV R11, IR
+MOV IP, R5
+MOV IP, _t
+MOV IR, R6
+MOV IV, R7
+_t:
+HLT
