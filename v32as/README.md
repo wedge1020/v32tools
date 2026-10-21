@@ -1,4 +1,4 @@
-# v32as
+# v32as.sh
 
 This is a  proof-of-concept BASH-based Vircon32 assembler.  Yes, you read
 that right:  an obscenely  high-level shell  script performing  among the
@@ -13,10 +13,10 @@ something needing to be done multiple times a second.
 ## USAGE
 
 ```
-             v32as - Vircon32 assembler written in BASH, powered by
+          v32as.sh - Vircon32 assembler written in BASH, powered by
                      Regular Expressions
 
-              usage: v32as [OPTION..] [ASMFILE..]
+              usage: v32as.sh [OPTION..] [ASMFILE..]
 
             option - description
  =================   ===================================================
@@ -39,7 +39,7 @@ The assembler can take  data via STDIN, or by specifying  one or more ASM
 files on the command-line.  It will process them one at  a time, in order
 of specification, and output the combined results to STDOUT.
 
-Note that,  having the  preprocessor be a  separate tool,  `v32as` cannot
+Note that, having the preprocessor  be a separate tool, `v32as.sh` cannot
 handle ANY preprocessor  directives in its input.  Things like `%include`
 and `%define`, when encountered, will result in errors being triggered.
 
@@ -50,13 +50,13 @@ you have all the needed prerequisite tools, and install it.
 
 ## DEPENDENCIES
 
-In order for `v32as` to run, you will need the following:
+In order for `v32as.sh` to run, you will need the following:
 
 ### BINCODE
 
 You need  to build and install  the `bincode` tool, also  from within the
 `v32tools` suite. This  tool will do the actual generation  of the binary
-data; the `v32as` script proper generates purely text data.
+data; the `v32as.sh` script proper generates purely text data.
 
 ### BC
 

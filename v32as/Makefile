@@ -4,7 +4,7 @@ INC =
 CC = gcc
 SRC = $(wildcard *.c)
 BIN = $(SRC:.c=)
-PROJ = v32as
+PROJ = v32as.sh
 all: $(SRC) $(BIN)
 
 debug: CFLAGS += -DDEBUG -g
