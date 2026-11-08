@@ -1,0 +1,24 @@
+# v32tools manifest -- the single source of truth for the Makefile AND the CMake
+# infrastructure. One tool per line, in BUILD ORDER (the order the tools are
+# built, cleaned, installed, ...). Blank lines and '#' comments are ignored.
+#
+# Columns are separated by whitespace; the last column (description) runs to the
+# end of the line.
+#
+#   name      directory name under tools/ (also the target name: `make v32as`)
+#   backends  comma list of native build systems the tool offers: make, cmake
+#   hostdeps  comma list of host programs needed to BUILD the tool ('-' = none).
+#             'cc' means any C compiler (cc, gcc or clang). flex is special: if
+#             it is missing, v32tools can build the vendored deps/flex-*.tar.gz.
+#   url       git URL used by `make bootstrap` / scripts/add-tool.sh
+#   description
+#
+# Add a tool: see docs/ADDING-A-TOOL.md  (or: scripts/add-tool.sh NAME URL ...)
+#
+# name    backends    hostdeps         url                                       description
+v32as     make        cc,flex,bison    https://github.com/wedge1020/v32as.git    Vircon32 assembler (v32as) and linker (v32asld)
+v32opt    make,cmake  cc               https://github.com/wedge1020/v32opt.git   Assembly optimizer
+v32sim    make        cc,flex,bison    https://github.com/wedge1020/v32sim.git   Text-based debugger, profiler and simulator (needs GNU readline)
+v32cc     make        cc,flex,bison    https://github.com/wedge1020/v32cc.git    C compiler (v32cc) and C library
+v32lua    make,cmake  cc,flex,bison    https://github.com/wedge1020/v32lua.git   Lua-subset to Vircon32 assembly translator
+v32cxx    make,cmake  cc,flex,bison    https://github.com/wedge1020/v32cxx.git   C++ subset to C transpiler (v32c++ / v32c)

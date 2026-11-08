@@ -1,0 +1,37 @@
+# V32ToolsManifest.cmake -- reads tools.list (shared with the Makefile front end)
+#
+#   v32t_read_manifest(<file>)
+#
+# Sets in the caller's scope:
+#   V32T_ALL_TOOLS            tool names in build order
+#   V32T_<name>_BACKENDS      list (make;cmake)
+#   V32T_<name>_HOSTDEPS      list ('-' entries removed)
+#   V32T_<name>_URL
+#   V32T_<name>_DESC
+macro(v32t_read_manifest _file)
+    set(V32T_ALL_TOOLS "")
+    file(STRINGS "${_file}" _v32t_lines)
+    foreach(_v32t_line IN LISTS _v32t_lines)
+        string(STRIP "${_v32t_line}" _v32t_line)
+        if(NOT _v32t_line STREQUAL "" AND NOT _v32t_line MATCHES "^#")
+            string(REGEX MATCHALL "[^ \t]+" _v32t_f "${_v32t_line}")
+            list(LENGTH _v32t_f _v32t_n)
+            if(_v32t_n LESS 4)
+                message(FATAL_ERROR "${_file}: need at least 4 columns: ${_v32t_line}")
+            endif()
+            list(GET _v32t_f 0 _v32t_name)
+            list(GET _v32t_f 1 _v32t_b)
+            list(GET _v32t_f 2 _v32t_h)
+            list(GET _v32t_f 3 _v32t_u)
+            string(REPLACE "," ";" _v32t_b "${_v32t_b}")
+            string(REPLACE "," ";" _v32t_h "${_v32t_h}")
+            list(REMOVE_ITEM _v32t_h "-")
+            string(REGEX REPLACE "^([^ \t]+[ \t]+)([^ \t]+[ \t]+)([^ \t]+[ \t]+)([^ \t]+)[ \t]*" "" _v32t_d "${_v32t_line}")
+            list(APPEND V32T_ALL_TOOLS "${_v32t_name}")
+            set(V32T_${_v32t_name}_BACKENDS "${_v32t_b}")
+            set(V32T_${_v32t_name}_HOSTDEPS "${_v32t_h}")
+            set(V32T_${_v32t_name}_URL      "${_v32t_u}")
+            set(V32T_${_v32t_name}_DESC     "${_v32t_d}")
+        endif()
+    endforeach()
+endmacro()
