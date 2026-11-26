@@ -1,9 +1,8 @@
 # v32tools -- meta Makefile
 #
-# Builds, tests,  installs and  removes the  Vircon32 tools  under tools/
-# from one  place, each with its  own native build system.  The tool list
-# and build order live in  tools.list; docs/USAGE.md has the full manual,
-# `make help` the short one.
+# Builds, tests, installs and removes the Vircon32 tools under tools/ from one place,
+# each with its own native build system. The tool list and build order live in
+# tools.list; docs/USAGE.md has the full manual, `make help` the short one.
 #
 # Needs GNU make (on BSD/macOS-without-GNU: `gmake`; on Windows: MSYS2/MinGW).
 
@@ -11,16 +10,14 @@
 SHELL         := /bin/sh
 .NOTPARALLEL:   # tools are processed one after the other; -j still reaches each tool's own make
 
-# ---- keep our selectors out of the tools' builds ---------------------------
-#
-# Command-line variables normally reach  every sub-make through MAKEFLAGS
-# and  would OVERRIDE  the tools'  own assignments.  Clear that  channel;
-# PREFIX, DESTDIR,  DEST_LANG, ... still arrive  through the environment,
+# ---- keep our selectors out of the tools' builds -----------------------------------------
+# Command-line variables normally reach every sub-make through MAKEFLAGS and would
+# OVERRIDE the tools' own assignments (v32io has `TOOLS = tools`, for example). Clear
+# that channel; PREFIX, DESTDIR, DEST_LANG, ... still arrive through the environment,
 # where the tools' `?=` defaults honour them.
-#
 MAKEOVERRIDES =
 
-# ---- user-facing knobs -----------------------------------------------------
+# ---- user-facing knobs -------------------------------------------------------------------
 TOOLS       ?= all
 SKIP        ?=
 BACKEND     ?= make
@@ -85,7 +82,7 @@ help:
 #   make <tool>-<step>                             one step of one tool   (make v32as-clean)
 #
 #   TOOLS="v32as v32opt"   only these (comma or space separated; default: all)
-#   SKIP=NAME              leave these out
+#   SKIP=v32io             leave these out
 #   BACKEND=make|cmake|auto  tool build system (default make; cmake/auto use a tool's
 #                          CMakeLists.txt when it has one)
 #   PREFIX=/opt/vircon32   system install location (sysinstall); DESTDIR=... for packaging
@@ -105,6 +102,7 @@ help:
 #   make status      git state of every tool
 #   make import ARCHIVE=v32as-project.zip [TOOL=v32as]   unpack a snapshot into tools/
 #   make flex        build the vendored flex into build/deps (done automatically if needed)
+#   make archive     snapshot of this repository (not the tools) as ../v32tools-project-YYYYMMDD.zip
 #
 # See docs/USAGE.md. CMake users: the same operations are `cmake --build build --target ...`.
 #ENDHELP
@@ -160,8 +158,18 @@ endef
 $(foreach t,$(ALL_TOOLS),$(foreach a,$(ACTIONS),$(eval $(call TOOL_RULE,$(t),$(a)))))
 $(foreach t,$(ALL_TOOLS),$(eval $(t): $(t)-build))
 
+# `make clean` also runs every tool's clean (the aggregate above); this part removes
+# this repository's own leftovers: snapshots and patches.
 clean:
-	@rm -f ../v32tools-project.zip *.zip *.patch
+	@rm -f *.zip *.patch ../v32tools-project.zip ../v32tools-project-[0-9]*.zip
 
-archive: clean
-	@zip -r ../v32tools-project.zip *
+# `make archive`: a snapshot of THIS repository (not the tools' sources: tools/<name>
+# are submodules with their own `make archive`) as ../v32tools-project-YYYYMMDD.zip.
+# v32tools has no version of its own, so the stamp is today's date (ARCHDATE=... to pick one).
+ARCHDATE ?= $(shell date +%Y%m%d)
+SNAPSHOT := ../v32tools-project-$(ARCHDATE).zip
+.PHONY: archive
+archive:
+	@rm -f *.zip *.patch ../v32tools-project.zip ../v32tools-project-[0-9]*.zip
+	@zip -qr $(SNAPSHOT) . -x '.git' '.git/*' 'build/*' 'tools/*/*' '*.zip' '*.patch' '*~' '.*.sw[op]'
+	@echo "wrote $(SNAPSHOT)"

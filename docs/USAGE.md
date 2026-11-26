@@ -1,7 +1,7 @@
 # Using v32tools
 
-Two front ends, same operations.  Pick whichever you like per invocation;
-they can share the checked-out tools (but see "Build trees" below).
+Two front ends, same operations. Pick whichever you like per invocation; they can share the
+checked-out tools (but see "Build trees" below).
 
 ## Steps
 
@@ -17,8 +17,8 @@ they can share the checked-out tools (but see "Build trees" below).
 | `sysinstall`   | **system-wide** install (`/usr/local` by default; may need `sudo`)                       |
 | `sysuninstall` | undo `sysinstall`                                                                        |
 
-Tools  are processed  one at  a time,  in `tools.list`  order. The  first
-failure stops the run (`make -k` keeps going).
+Tools are processed one at a time, in `tools.list` order. The first failure stops the run
+(`make -k` keeps going).
 
 ## Makefile front end
 
@@ -44,33 +44,24 @@ make list | doctor | status | bootstrap | update | flex | import
 | `FLEX`          | `auto`   | `off`: never build the vendored flex |
 | `V32T_MAKE_ARGS`, `V32T_CMAKE_ARGS`, `V32T_CMAKE_GENERATOR` | empty | extra arguments for the tools' make / configure; generator for CMake-built tools |
 
-Any  other   variable  (`DEST_LANG=es`,   `COMPONENTS=both`,  `CC=clang`,
-`CFLAGS=...`) reaches  the tools  through the  **environment**, not  as a
-command-line override, so the tools' own `?=` defaults honor it and their
-internal assignments  are not  clobbered. (Variables whose  tool Makefile
-uses a plain `=`  therefore ignore it: that is by  design here; set those
-in the tool's own invocation.)
+Any other variable (`DEST_LANG=es`, `COMPONENTS=both`, `CC=clang`, `CFLAGS=...`) reaches the tools
+through the **environment**, not as a command-line override, so the tools' own `?=` defaults honor
+it and their internal assignments are not clobbered. (Variables whose tool Makefile uses a plain `=`
+therefore ignore it: that is by design here; set those in the tool's own invocation.)
 
 Other commands:
 
-* `make  bootstrap  [TOOLS=...]`:  `git  submodule add`  for  every  tool
-  whose  directory  is  empty  (uses  the  URL  column  of  `tools.list`;
-  `V32T_URL_<name>=...`  overrides  one,   `V32T_BRANCH_<name>`  picks  a
-  branch);  initialises submodules  that are  registered but  not checked
-  out; leaves existing directories alone.
- 
-* `make  update  [TOOLS=...]`:  `git  submodule  update  --init  --remote
-  --merge`; commit the moved pointers.
-
+* `make bootstrap [TOOLS=...]`: `git submodule add` for every tool whose directory is empty (uses the
+  URL column of `tools.list`; `V32T_URL_<name>=...` overrides one, `V32T_BRANCH_<name>` picks a branch);
+  initialises submodules that are registered but not checked out; leaves existing directories alone.
+* `make update [TOOLS=...]`: `git submodule update --init --remote --merge`; commit the moved pointers.
 * `make status`: submodule state plus `describe`/branch of each tool.
-
-* `make import ARCHIVE=v32as-project.zip  [TOOL=v32as] [FORCE=1]`: unpack
-  `a snapshot (zip, tar.gz) into  tools/<name>/`, for tools you only have
-  `as an archive.
-
-* `make  flex`  /  `make  flex-rebuild`: build  the  vendored  flex  into
-  `build/deps`.
-
+* `make import ARCHIVE=v32as-project.zip [TOOL=v32as] [FORCE=1]`: unpack a snapshot (zip, tar.gz) into
+  `tools/<name>/`, for tools you only have as an archive.
+* `make flex` / `make flex-rebuild`: build the vendored flex into `build/deps`.
+* `make archive [ARCHDATE=YYYYMMDD]`: a snapshot of this repository (without the tools' sources) as
+  `../v32tools-project-YYYYMMDD.zip`, dated today by default. Each tool has its own `make archive`
+  (`../<tool>-project-YYYYMMDD.zip`, dated from its version) and `make version VERSION=YYYYMMDD-status`.
 * `make doctor`: which host programs exist; which tool lacks what.
 
 ## CMake front end
@@ -81,11 +72,10 @@ cmake --build build [--target T]
 cmake --install build [--prefix DIR]       = system install of the selected tools
 ```
 
-Targets:  `v32t-<step>`  for  all  selected tools  (`v32t-build`  is  the
-default  target), `<tool>`  (build),  `<tool>-<step>`, plus  `v32t-flex`,
-`v32t-doctor`,  `v32t-list`.  (`install`  itself is  reserved  by  CMake,
-hence the  `v32t-` prefix; `v32t-install`  is the *per-user*  one, `cmake
---install` and `v32t-sysinstall` the system one.)
+Targets: `v32t-<step>` for all selected tools (`v32t-build` is the default target),
+`<tool>` (build), `<tool>-<step>`, plus `v32t-flex`, `v32t-doctor`, `v32t-list`.
+(`install` itself is reserved by CMake, hence the `v32t-` prefix; `v32t-install` is the *per-user* one,
+`cmake --install` and `v32t-sysinstall` the system one.)
 
 | cache option           | default | effect |
 |------------------------|---------|--------|
@@ -100,55 +90,47 @@ hence the  `v32t-` prefix; `v32t-install`  is the *per-user*  one, `cmake
 | `V32T_MAKE_ARGS`, `V32T_CMAKE_ARGS` | empty | extra arguments for tool make / tool configure |
 | `V32T_CMAKE_GENERATOR` | empty   | generator for CMake-built tools, e.g. `"MinGW Makefiles"`, `Ninja` |
 
-`DESTDIR`  is  honored  from   the  environment:  `DESTDIR=/stage  cmake.
-`--install build  --prefix /usr` tools.list` is  a configure dependency,.
-`so adding a tool re-configures automatically                           .
+`DESTDIR` is honored from the environment: `DESTDIR=/stage cmake --install build --prefix /usr`.
+`tools.list` is a configure dependency, so adding a tool re-configures automatically.
 
 ## Where things go
 
 | step         | Makefile backend (tool's own targets)                                   | CMake backend |
 |--------------|--------------------------------------------------------------------------|---------------|
-| `install`    | v32as `~/bin` + `~/man`; v32opt/v32sim/v32lua/v32cxx `~/bin` (v32sim also `~/share/v32sim`); v32cc `~/.local/lib/v32cc` linked from `~/bin`  | `<USER_PREFIX>/bin`, `/share/man`, ... |
-| `sysinstall` | `/usr/local/bin`, `/usr/local/share/man`; v32cc, v32lua, v32cxx also put headers/libraries/docs under `<prefix>/Vircon32/v32tools/...` | same layout under `PREFIX` |
+| `install`    | v32as `~/bin` + `~/man`; v32opt/v32sim/v32lua/v32cxx `~/bin` (v32sim also `~/share/v32sim`); v32cc `~/.local/lib/v32cc` linked from `~/bin`; v32io = `sysinstall` | `<USER_PREFIX>/bin`, `/share/man`, ... |
+| `sysinstall` | `/usr/local/bin`, `/usr/local/share/man`; v32cc, v32lua, v32cxx, v32io also put headers/libraries/docs under `<prefix>/Vircon32/v32tools/...` | same layout under `PREFIX` |
 
-Note that the per-user `install` of v32opt, v32lua and v32sim **skips** (and says so) when neither
-`~/bin/bin.<arch>` nor `~/bin` exists: `mkdir ~/bin` first.
+The per-user `install` of every tool creates `~/bin` when it does not exist (v32opt, v32lua and
+v32sim skipped instead before their 20261126-dev snapshots).
 
 ### Tool-specific knobs
 
-* v32opt, v32lua,  v32cxx: `DEST_LANG=en|es|fr`  (and `all` for  cxx) for
-  v32the documentation language.
-
-* v32cc, v32sim: `V32SIM_HOME`, `V32AS`, ...  for their test suites; with
-  this layout their  defaults (`../v32sim`, `../v32as/bin/v32as`) resolve
-  correctly because the tools are siblings under `tools/`.
+* v32io: `COMPONENTS=v32io|v32dev|both` (system install).
+* every tool: `DEST_LANG=en|es|fr` for the documentation language (`all` too for v32cxx, v32sim and v32io).
+  v32as and v32cc install the translated README, user manual and section-1 manual pages under the
+  usual names; their other manual pages (sections 3 and 7) and design notes are English only.
+  v32sim's `DEST_LANG` picks the installed manual page; its user manual ships in the release zips.
+* v32cc, v32sim: `V32SIM_HOME`, `V32AS`, ... for their test suites; with this layout their defaults
+  (`../v32sim`, `../v32as/bin/v32as`) resolve correctly because the tools are siblings under `tools/`.
 
 ### Staged installs and tools that ignore `PREFIX`/`DESTDIR`
 
-Before running a Makefile's `sysinstall`  with `PREFIX` or `DESTDIR` set,
-the front ends  check that the tool's Makefile mentions  that variable at
-all.  If not  (v32cxx's does  not),  they **refuse**  instead of  writing
-outside your staging  root; use `BACKEND=cmake` for that  tool (its CMake
-build supports both),  or set `V32T_FORCE=1` to override.  A subtler case
-the check cannot see: v32as's  `sysinstall` is hard-wired to `/usr/local`
-(it  only honors  `DESTDIR`); use  `BACKEND=cmake`  once it  has a  CMake
-build, or `make -C tools/v32as install PREFIX=/your/prefix`.
+Before running a Makefile's `sysinstall` with `PREFIX` or `DESTDIR` set, the front ends check that the
+tool's Makefile mentions that variable at all. If not, they **refuse** instead of writing outside
+your staging root; use `BACKEND=cmake` for that tool, or set `V32T_FORCE=1` to override. Every tool
+in the 20261126-dev snapshots honours both (v32as and v32cxx did not before), so the check only
+matters for older snapshots.
 
 ## Build trees
 
-Makefile-backend tools  build **in their source  tree** (`tools/<n>/bin`,
-`build`, `obj`,  ...); each  tool's `.gitignore` keeps  that out  of git.
-CMake-backend  tools build  in `build/cmake/<tool>`  (Make front  end) or
-`<your build dir>/cmake/<tool>` (CMake front end). A tool built both ways
-keeps two independent trees; `distclean`  removes the one for the backend
-selected.
+Makefile-backend tools build **in their source tree** (`tools/<n>/bin`, `build`, `obj`, ...); each
+tool's `.gitignore` keeps that out of git. CMake-backend tools build in `build/cmake/<tool>`
+(Make front end) or `<your build dir>/cmake/<tool>` (CMake front end). A tool built both ways
+keeps two independent trees; `distclean` removes the one for the backend selected.
 
 ## Parallel builds
 
-`JOBS=n` / `V32T_JOBS` is passed to each tool, and `make -jN` on the meta
-Makefile reaches the tools too (the  meta Makefile itself still runs them
-one  at a  time). **v32as's  Makefile currently  races under  `-j`**: its
-parser rule produces `parser.tab.c` and `parser.tab.h` as two independent
-targets, so  bison runs twice at  once and corrupts the  output. Build it
-serially  (`make  v32as`,  no  `JOBS`)  until that  rule  is  fixed  (see
-docs/DESIGN.md).
+`JOBS=n` / `V32T_JOBS` is passed to each tool, and `make -jN` on the meta Makefile reaches the
+tools too (the meta Makefile itself still runs them one at a time). Every tool builds correctly in
+parallel; v32as and v32sim snapshots older than 20261126-dev could run bison twice at once under
+`-j` (see docs/DESIGN.md), so build those serially.

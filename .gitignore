@@ -1,6 +1,14 @@
-# v32tools build products (the tools keep their own .gitignore files)
+# v32tools: everything this repository builds itself
 /build/
-/out/
-*.swp
+/build-*/
+
+# snapshots and patches (make archive, git format-patch)
+*.zip
+*.patch
+
+# editor leftovers
 *~
-.DS_Store
+.*.sw[op]
+
+# tools/<name> are git submodules (or `make import` snapshots); their own
+# .gitignore files keep their build products out of git.

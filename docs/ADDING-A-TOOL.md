@@ -30,7 +30,7 @@ install for a Makefile that never mentions them.
 For the CMake backend: a normal `install()` and, for `uninstall`, an `uninstall` target (the existing
 tools already ship `cmake/cmake_uninstall.cmake.in`; copy that pattern). `BUILD_TESTING`/`ctest` for `test`.
 
-## Giving a Make-only tool a CMake build (v32as, v32cc, v32sim)
+## Giving a Make-only tool a CMake build (v32sim; v32as and v32cc have one)
 
 Nothing to change here. When `tools/v32as/CMakeLists.txt` appears (after you update the submodule),
 `BACKEND=auto|cmake` (Make) or the default `V32T_BACKEND=auto` (CMake) picks it up, and

@@ -1,0 +1,134 @@
+name: Source Bundle
+
+# One zip with v32tools AND the sources of every tool at the commits the
+# submodules pin, for people who want everything without git. The tools'
+# binary releases come from each tool's own "Generate Global Binaries"
+# workflow; this one only bundles sources and links to those.
+on:
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Purpose of this run'
+        type: choice
+        required: true
+        default: 'test'
+        options: ['test', 'release']
+      stamp:
+        description: 'Bundle date stamp YYYYMMDD (empty: today, UTC)'
+        type: string
+        required: false
+        default: ''
+      publish_release:
+        description: 'Release runs only: publish at once instead of leaving a draft'
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  bundle:
+    name: Bundle Sources
+    runs-on: ubuntu-latest
+    outputs:
+      stamp: ${{ steps.stamp.outputs.stamp }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Fetch the tools if they are not submodules yet
+        run: |
+          git config --global user.email ci@example.invalid
+          git config --global user.name ci
+          make bootstrap
+
+      - name: Date stamp
+        id: stamp
+        shell: bash
+        run: |
+          S="${{ inputs.stamp }}"
+          [ -n "$S" ] || S=$(date -u +%Y%m%d)
+          case "$S" in [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]) ;; *) echo "::error::stamp '$S' is not YYYYMMDD"; exit 1 ;; esac
+          echo "stamp=$S" >> "$GITHUB_OUTPUT"
+
+      # TOOLS.md: every tool's commit and version (read from its version macro),
+      # used both inside the zip and as part of the release text.
+      - name: Tool manifest
+        shell: bash
+        run: |
+          {
+            echo "| tool | version | commit |"
+            echo "| --- | --- | --- |"
+            for t in $(awk '!/^[ \t]*(#|$)/ { print $1 }' tools.list); do
+              d=tools/$t
+              [ -d "$d" ] || continue
+              v=$(grep -rhoE '^#define[[:space:]]+(V32CC_)?VERSION[[:space:]]+"[^"]+"' "$d/inc" 2>/dev/null | head -n1 | sed 's/.*"\(.*\)"/\1/')
+              c=$(git -C "$d" rev-parse --short HEAD 2>/dev/null || echo -)
+              echo "| [$t](https://github.com/wedge1020/$t/releases) | ${v:--} | \`$c\` |"
+            done
+          } > TOOLS.md
+          cat TOOLS.md
+
+      - name: Create the bundle
+        shell: bash
+        run: |
+          S=${{ steps.stamp.outputs.stamp }}
+          if [ "${{ inputs.build_type }}" = release ]; then Z=v32tools-$S-src.zip; else Z=v32tools-$S-test-src.zip; fi
+          rm -rf stage && mkdir -p stage/v32tools
+          git ls-files -z | xargs -0 -I{} cp --parents {} stage/v32tools/ 2>/dev/null || true
+          for t in $(awk '!/^[ \t]*(#|$)/ { print $1 }' tools.list); do
+            d=tools/$t; [ -d "$d" ] || continue
+            mkdir -p "stage/v32tools/$d"
+            (cd "$d" && git ls-files -z | xargs -0 -I{} cp --parents {} "$GITHUB_WORKSPACE/stage/v32tools/$d/")
+          done
+          cp TOOLS.md stage/v32tools/
+          (cd stage && zip -qr "../$Z" v32tools)
+          unzip -l "$Z" | tail -n 1
+          echo "ZIP=$Z" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v32tools-bundle
+          path: |
+            ${{ env.ZIP }}
+            TOOLS.md
+          retention-days: ${{ inputs.build_type == 'test' && 2 || 0 }}
+
+  release:
+    name: ${{ inputs.publish_release && 'Publish Release' || 'Create Draft Release' }}
+    needs: bundle
+    if: inputs.build_type == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      STAMP: ${{ needs.bundle.outputs.stamp }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github
+      - uses: actions/download-artifact@v4
+        with:
+          name: v32tools-bundle
+          path: artifacts
+      - name: Checksums and release text
+        shell: bash
+        run: |
+          [ -f .github/release-notes.md ] || { echo "::error::.github/release-notes.md is missing"; exit 1; }
+          (cd artifacts && sha256sum -- *.zip > SHA256SUMS.txt && cat SHA256SUMS.txt)
+          sed "s|@STAMP@|${STAMP}|g" .github/release-notes.md > release-notes.md
+          { echo; echo "## Tools in this bundle"; echo; cat artifacts/TOOLS.md; } >> release-notes.md
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.STAMP }}
+          target_commitish: ${{ github.sha }}
+          name: "v32tools ${{ env.STAMP }}"
+          body_path: release-notes.md
+          draft: ${{ !inputs.publish_release }}
+          fail_on_unmatched_files: true
+          files: |
+            artifacts/*.zip
+            artifacts/SHA256SUMS.txt
